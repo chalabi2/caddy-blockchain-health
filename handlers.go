@@ -1,0 +1,312 @@
+package blockchain_health
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"go.uber.org/zap"
+)
+
+// CosmosHandler handles health checks for Cosmos-based blockchain nodes
+type CosmosHandler struct {
+	client *http.Client
+	logger *zap.Logger
+}
+
+// NewCosmosHandler creates a new Cosmos protocol handler
+func NewCosmosHandler(timeout time.Duration, logger *zap.Logger) *CosmosHandler {
+	return &CosmosHandler{
+		client: &http.Client{
+			Timeout: timeout,
+		},
+		logger: logger,
+	}
+}
+
+// CosmosStatus represents the response from Cosmos /status endpoint
+type CosmosStatus struct {
+	Result struct {
+		SyncInfo struct {
+			LatestBlockHeight string `json:"latest_block_height"`
+			CatchingUp        bool   `json:"catching_up"`
+		} `json:"sync_info"`
+	} `json:"result"`
+}
+
+// CosmosRESTSyncing represents the response from Cosmos REST /cosmos/base/tendermint/v1beta1/syncing
+type CosmosRESTSyncing struct {
+	Syncing bool `json:"syncing"`
+}
+
+// CosmosRESTLatestBlock represents the response from Cosmos REST latest block endpoint
+type CosmosRESTLatestBlock struct {
+	Block struct {
+		Header struct {
+			Height string `json:"height"`
+		} `json:"header"`
+	} `json:"block"`
+}
+
+// CheckHealth implements ProtocolHandler for Cosmos nodes
+func (c *CosmosHandler) CheckHealth(ctx context.Context, node NodeConfig) (*NodeHealth, error) {
+	start := time.Now()
+	health := &NodeHealth{
+		Name:      node.Name,
+		URL:       node.URL,
+		Healthy:   false,
+		LastCheck: time.Now(),
+	}
+
+	// Try RPC endpoint first
+	blockHeight, catchingUp, err := c.checkRPCStatus(ctx, node.URL)
+	if err != nil {
+		// If RPC fails and we have an API URL, try REST
+		if node.APIURL != "" {
+			c.logger.Debug("RPC check failed, trying REST API",
+				zap.String("node", node.Name),
+				zap.Error(err))
+
+			blockHeight, catchingUp, err = c.checkRESTStatus(ctx, node.APIURL)
+		}
+
+		if err != nil {
+			health.LastError = err.Error()
+			health.ResponseTime = time.Since(start)
+			return health, nil // Don't return error, just mark as unhealthy
+		}
+	}
+
+	health.BlockHeight = blockHeight
+	health.CatchingUp = &catchingUp
+	health.ResponseTime = time.Since(start)
+
+	// Node is healthy if we got a response and it's not catching up
+	health.Healthy = !catchingUp
+
+	return health, nil
+}
+
+// GetBlockHeight implements ProtocolHandler for Cosmos nodes
+func (c *CosmosHandler) GetBlockHeight(ctx context.Context, url string) (uint64, error) {
+	// Try RPC first
+	height, _, err := c.checkRPCStatus(ctx, url)
+	if err != nil {
+		// If this looks like a REST URL, try REST instead
+		if strings.Contains(url, ":1317") || strings.Contains(url, "/cosmos/") {
+			height, _, err = c.checkRESTStatus(ctx, url)
+		}
+	}
+	return height, err
+}
+
+// checkRPCStatus checks Cosmos node status via RPC endpoint
+func (c *CosmosHandler) checkRPCStatus(ctx context.Context, url string) (uint64, bool, error) {
+	statusURL := fmt.Sprintf("%s/status", strings.TrimSuffix(url, "/"))
+
+	req, err := http.NewRequestWithContext(ctx, "GET", statusURL, nil)
+	if err != nil {
+		return 0, false, fmt.Errorf("creating request: %w", err)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return 0, false, fmt.Errorf("RPC request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, false, fmt.Errorf("RPC status %d", resp.StatusCode)
+	}
+
+	var status CosmosStatus
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		return 0, false, fmt.Errorf("decoding RPC response: %w", err)
+	}
+
+	height, err := strconv.ParseUint(status.Result.SyncInfo.LatestBlockHeight, 10, 64)
+	if err != nil {
+		return 0, false, fmt.Errorf("parsing block height: %w", err)
+	}
+
+	return height, status.Result.SyncInfo.CatchingUp, nil
+}
+
+// checkRESTStatus checks Cosmos node status via REST API
+func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (uint64, bool, error) {
+	baseURL = strings.TrimSuffix(baseURL, "/")
+
+	// Check syncing status
+	syncingURL := fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/syncing", baseURL)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", syncingURL, nil)
+	if err != nil {
+		return 0, false, fmt.Errorf("creating syncing request: %w", err)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return 0, false, fmt.Errorf("REST syncing request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, false, fmt.Errorf("REST syncing status %d", resp.StatusCode)
+	}
+
+	var syncStatus CosmosRESTSyncing
+	if err := json.NewDecoder(resp.Body).Decode(&syncStatus); err != nil {
+		return 0, false, fmt.Errorf("decoding REST syncing response: %w", err)
+	}
+
+	// Get latest block height
+	blockURL := fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/blocks/latest", baseURL)
+
+	req, err = http.NewRequestWithContext(ctx, "GET", blockURL, nil)
+	if err != nil {
+		return 0, false, fmt.Errorf("creating block request: %w", err)
+	}
+
+	resp, err = c.client.Do(req)
+	if err != nil {
+		return 0, false, fmt.Errorf("REST block request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, false, fmt.Errorf("REST block status %d", resp.StatusCode)
+	}
+
+	var blockResp CosmosRESTLatestBlock
+	if err := json.NewDecoder(resp.Body).Decode(&blockResp); err != nil {
+		return 0, false, fmt.Errorf("decoding REST block response: %w", err)
+	}
+
+	height, err := strconv.ParseUint(blockResp.Block.Header.Height, 10, 64)
+	if err != nil {
+		return 0, false, fmt.Errorf("parsing block height: %w", err)
+	}
+
+	return height, syncStatus.Syncing, nil
+}
+
+// EVMHandler handles health checks for EVM-based blockchain nodes
+type EVMHandler struct {
+	client *http.Client
+	logger *zap.Logger
+}
+
+// NewEVMHandler creates a new EVM protocol handler
+func NewEVMHandler(timeout time.Duration, logger *zap.Logger) *EVMHandler {
+	return &EVMHandler{
+		client: &http.Client{
+			Timeout: timeout,
+		},
+		logger: logger,
+	}
+}
+
+// EVMJSONRPCRequest represents a JSON-RPC request
+type EVMJSONRPCRequest struct {
+	JSONRPC string        `json:"jsonrpc"`
+	Method  string        `json:"method"`
+	Params  []interface{} `json:"params"`
+	ID      int           `json:"id"`
+}
+
+// EVMJSONRPCResponse represents a JSON-RPC response
+type EVMJSONRPCResponse struct {
+	JSONRPC string      `json:"jsonrpc"`
+	Result  interface{} `json:"result,omitempty"`
+	Error   *struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+	ID int `json:"id"`
+}
+
+// CheckHealth implements ProtocolHandler for EVM nodes
+func (e *EVMHandler) CheckHealth(ctx context.Context, node NodeConfig) (*NodeHealth, error) {
+	start := time.Now()
+	health := &NodeHealth{
+		Name:      node.Name,
+		URL:       node.URL,
+		Healthy:   false,
+		LastCheck: time.Now(),
+	}
+
+	blockHeight, err := e.GetBlockHeight(ctx, node.URL)
+	if err != nil {
+		health.LastError = err.Error()
+		health.ResponseTime = time.Since(start)
+		return health, nil // Don't return error, just mark as unhealthy
+	}
+
+	health.BlockHeight = blockHeight
+	health.ResponseTime = time.Since(start)
+	health.Healthy = true
+	// EVM nodes don't have a "catching up" concept like Cosmos
+	// If we can get a block height, we consider the node healthy
+
+	return health, nil
+}
+
+// GetBlockHeight implements ProtocolHandler for EVM nodes
+func (e *EVMHandler) GetBlockHeight(ctx context.Context, url string) (uint64, error) {
+	reqBody := EVMJSONRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "eth_blockNumber",
+		Params:  []interface{}{},
+		ID:      1,
+	}
+
+	reqBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return 0, fmt.Errorf("marshaling request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(string(reqBytes)))
+	if err != nil {
+		return 0, fmt.Errorf("creating request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := e.client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("JSON-RPC request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("JSON-RPC status %d", resp.StatusCode)
+	}
+
+	var rpcResp EVMJSONRPCResponse
+	if err := json.NewDecoder(resp.Body).Decode(&rpcResp); err != nil {
+		return 0, fmt.Errorf("decoding JSON-RPC response: %w", err)
+	}
+
+	if rpcResp.Error != nil {
+		return 0, fmt.Errorf("JSON-RPC error %d: %s", rpcResp.Error.Code, rpcResp.Error.Message)
+	}
+
+	heightStr, ok := rpcResp.Result.(string)
+	if !ok {
+		return 0, fmt.Errorf("invalid block height response type")
+	}
+
+	// Remove 0x prefix if present
+	heightStr = strings.TrimPrefix(heightStr, "0x")
+
+	height, err := strconv.ParseUint(heightStr, 16, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parsing block height: %w", err)
+	}
+
+	return height, nil
+}

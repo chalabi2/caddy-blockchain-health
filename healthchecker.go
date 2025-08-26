@@ -1,0 +1,354 @@
+package blockchain_health
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"go.uber.org/zap"
+)
+
+// NewHealthChecker creates a new health checker instance
+func NewHealthChecker(config *Config, cache *HealthCache, metrics *Metrics, logger *zap.Logger) *HealthChecker {
+	timeout, _ := time.ParseDuration(config.HealthCheck.Timeout)
+
+	return &HealthChecker{
+		config:          config,
+		cosmosHandler:   NewCosmosHandler(timeout, logger),
+		evmHandler:      NewEVMHandler(timeout, logger),
+		cache:           cache,
+		metrics:         metrics,
+		logger:          logger,
+		circuitBreakers: make(map[string]*CircuitBreaker),
+	}
+}
+
+// CheckAllNodes performs health checks on all configured nodes
+func (h *HealthChecker) CheckAllNodes(ctx context.Context) ([]*NodeHealth, error) {
+	nodes := h.config.Nodes
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("no nodes configured")
+	}
+
+	// Use semaphore pattern to limit concurrent checks
+	sem := make(chan struct{}, h.config.Performance.MaxConcurrentChecks)
+	var wg sync.WaitGroup
+	results := make([]*NodeHealth, len(nodes))
+
+	// Check each node concurrently with rate limiting
+	for i, node := range nodes {
+		wg.Add(1)
+		go func(idx int, n NodeConfig) {
+			defer wg.Done()
+
+			// Acquire semaphore
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			health := h.checkSingleNode(ctx, n)
+			results[idx] = health
+		}(i, node)
+	}
+
+	wg.Wait()
+
+	// Post-process: validate block heights and update metrics
+	if err := h.validateBlockHeights(results); err != nil {
+		h.logger.Warn("block height validation failed", zap.Error(err))
+	}
+
+	// Update metrics
+	if h.metrics != nil {
+		h.updateMetrics(results)
+	}
+
+	return results, nil
+}
+
+// checkSingleNode performs health check on a single node with caching and circuit breaker
+func (h *HealthChecker) checkSingleNode(ctx context.Context, node NodeConfig) *NodeHealth {
+	// Check cache first
+	if cached := h.cache.Get(node.Name); cached != nil {
+		h.logger.Debug("using cached health result", zap.String("node", node.Name))
+		return cached
+	}
+
+	// Check circuit breaker
+	breaker := h.getCircuitBreaker(node.Name)
+	if !breaker.CanExecute() {
+		h.logger.Debug("circuit breaker open", zap.String("node", node.Name))
+		return &NodeHealth{
+			Name:      node.Name,
+			URL:       node.URL,
+			Healthy:   false,
+			LastCheck: time.Now(),
+			LastError: "circuit breaker open",
+		}
+	}
+
+	// Perform health check with retry
+	health := h.checkWithRetry(ctx, node)
+
+	// Update circuit breaker
+	if health.Healthy {
+		breaker.RecordSuccess()
+	} else {
+		breaker.RecordFailure()
+	}
+
+	// Cache the result
+	h.cache.Set(node.Name, health)
+
+	return health
+}
+
+// checkWithRetry performs health check with exponential backoff retry
+func (h *HealthChecker) checkWithRetry(ctx context.Context, node NodeConfig) *NodeHealth {
+	retryDelay, _ := time.ParseDuration(h.config.HealthCheck.RetryDelay)
+	maxAttempts := h.config.HealthCheck.RetryAttempts
+
+	var lastHealth *NodeHealth
+	var lastErr error
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		// Select appropriate handler based on node type
+		var health *NodeHealth
+		var err error
+
+		switch node.Type {
+		case NodeTypeCosmos:
+			health, err = h.cosmosHandler.CheckHealth(ctx, node)
+		case NodeTypeEVM:
+			health, err = h.evmHandler.CheckHealth(ctx, node)
+		default:
+			return &NodeHealth{
+				Name:      node.Name,
+				URL:       node.URL,
+				Healthy:   false,
+				LastCheck: time.Now(),
+				LastError: fmt.Sprintf("unsupported node type: %s", node.Type),
+			}
+		}
+
+		if err != nil {
+			lastErr = err
+			h.logger.Debug("health check attempt failed",
+				zap.String("node", node.Name),
+				zap.Int("attempt", attempt),
+				zap.Error(err))
+		} else {
+			lastHealth = health
+			if health.Healthy {
+				// Success, no need to retry
+				break
+			}
+		}
+
+		// Don't sleep after the last attempt
+		if attempt < maxAttempts {
+			select {
+			case <-ctx.Done():
+				// Context cancelled, stop retrying
+				break
+			case <-time.After(retryDelay):
+				// Exponential backoff for next attempt
+				retryDelay = time.Duration(float64(retryDelay) * 1.5)
+			}
+		}
+	}
+
+	// If we have a health result (even if unhealthy), use it
+	if lastHealth != nil {
+		return lastHealth
+	}
+
+	// If we never got a health result, create one with the last error
+	return &NodeHealth{
+		Name:      node.Name,
+		URL:       node.URL,
+		Healthy:   false,
+		LastCheck: time.Now(),
+		LastError: fmt.Sprintf("all attempts failed: %v", lastErr),
+	}
+}
+
+// validateBlockHeights validates block heights within the pool and against external references
+func (h *HealthChecker) validateBlockHeights(healthResults []*NodeHealth) error {
+	if len(healthResults) == 0 {
+		return nil
+	}
+
+	// Group nodes by type for validation
+	cosmoNodes := make([]*NodeHealth, 0)
+	evmNodes := make([]*NodeHealth, 0)
+
+	for _, health := range healthResults {
+		if !health.Healthy {
+			continue // Skip unhealthy nodes for validation
+		}
+
+		// Find the node config to get the type
+		for _, node := range h.config.Nodes {
+			if node.Name == health.Name {
+				switch node.Type {
+				case NodeTypeCosmos:
+					cosmoNodes = append(cosmoNodes, health)
+				case NodeTypeEVM:
+					evmNodes = append(evmNodes, health)
+				}
+				break
+			}
+		}
+	}
+
+	// Validate Cosmos nodes
+	if len(cosmoNodes) > 0 {
+		if err := h.validateNodeGroup(cosmoNodes, NodeTypeCosmos); err != nil {
+			h.logger.Warn("Cosmos node validation failed", zap.Error(err))
+		}
+	}
+
+	// Validate EVM nodes
+	if len(evmNodes) > 0 {
+		if err := h.validateNodeGroup(evmNodes, NodeTypeEVM); err != nil {
+			h.logger.Warn("EVM node validation failed", zap.Error(err))
+		}
+	}
+
+	return nil
+}
+
+// validateNodeGroup validates block heights within a group of nodes of the same type
+func (h *HealthChecker) validateNodeGroup(nodes []*NodeHealth, nodeType NodeType) error {
+	if len(nodes) <= 1 {
+		return nil // Nothing to validate
+	}
+
+	// Find the highest block height in the group
+	var maxHeight uint64
+	for _, node := range nodes {
+		if node.BlockHeight > maxHeight {
+			maxHeight = node.BlockHeight
+		}
+	}
+
+	// Check each node against the pool leader
+	threshold := uint64(h.config.BlockValidation.HeightThreshold)
+	for _, node := range nodes {
+		blocksBehind := int64(maxHeight - node.BlockHeight)
+		node.BlocksBehindPool = blocksBehind
+
+		if blocksBehind > int64(threshold) {
+			node.HeightValid = false
+			node.Healthy = false // Mark as unhealthy if too far behind
+			h.logger.Warn("node too far behind pool",
+				zap.String("node", node.Name),
+				zap.Uint64("node_height", node.BlockHeight),
+				zap.Uint64("max_height", maxHeight),
+				zap.Int64("blocks_behind", blocksBehind))
+		} else {
+			node.HeightValid = true
+		}
+	}
+
+	// Validate against external references if configured
+	for _, ref := range h.config.ExternalReferences {
+		if ref.Type == nodeType && ref.Enabled {
+			if err := h.validateAgainstExternal(nodes, ref); err != nil {
+				h.logger.Warn("external reference validation failed",
+					zap.String("reference", ref.Name),
+					zap.Error(err))
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateAgainstExternal validates nodes against an external reference
+func (h *HealthChecker) validateAgainstExternal(nodes []*NodeHealth, ref ExternalReference) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var externalHeight uint64
+	var err error
+
+	// Get external reference height
+	switch ref.Type {
+	case NodeTypeCosmos:
+		externalHeight, err = h.cosmosHandler.GetBlockHeight(ctx, ref.URL)
+	case NodeTypeEVM:
+		externalHeight, err = h.evmHandler.GetBlockHeight(ctx, ref.URL)
+	default:
+		return fmt.Errorf("unsupported external reference type: %s", ref.Type)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to get external reference height: %w", err)
+	}
+
+	// Check each node against external reference
+	threshold := uint64(h.config.BlockValidation.ExternalReferenceThreshold)
+	for _, node := range nodes {
+		blocksBehind := int64(externalHeight - node.BlockHeight)
+		node.BlocksBehindExternal = blocksBehind
+
+		if blocksBehind > int64(threshold) {
+			node.ExternalReferenceValid = false
+			h.logger.Warn("node too far behind external reference",
+				zap.String("node", node.Name),
+				zap.String("reference", ref.Name),
+				zap.Uint64("node_height", node.BlockHeight),
+				zap.Uint64("external_height", externalHeight),
+				zap.Int64("blocks_behind", blocksBehind))
+		} else {
+			node.ExternalReferenceValid = true
+		}
+	}
+
+	return nil
+}
+
+// getCircuitBreaker gets or creates a circuit breaker for a node
+func (h *HealthChecker) getCircuitBreaker(nodeName string) *CircuitBreaker {
+	h.mutex.RLock()
+	breaker, exists := h.circuitBreakers[nodeName]
+	h.mutex.RUnlock()
+
+	if !exists {
+		h.mutex.Lock()
+		// Double-check after acquiring write lock
+		if breaker, exists = h.circuitBreakers[nodeName]; !exists {
+			breaker = NewCircuitBreaker(int(h.config.FailureHandling.CircuitBreakerThreshold * 10))
+			h.circuitBreakers[nodeName] = breaker
+		}
+		h.mutex.Unlock()
+	}
+
+	return breaker
+}
+
+// updateMetrics updates prometheus metrics based on health check results
+func (h *HealthChecker) updateMetrics(results []*NodeHealth) {
+	var healthyCount, unhealthyCount int
+
+	for _, health := range results {
+		if health.Healthy {
+			healthyCount++
+		} else {
+			unhealthyCount++
+		}
+
+		// Update individual node metrics
+		h.metrics.blockHeightGauge.WithLabelValues(health.Name).Set(float64(health.BlockHeight))
+
+		if health.LastError != "" {
+			h.metrics.errorCount.WithLabelValues(health.Name, "health_check").Inc()
+		}
+	}
+
+	h.metrics.healthyNodes.Set(float64(healthyCount))
+	h.metrics.unhealthyNodes.Set(float64(unhealthyCount))
+	h.metrics.totalChecks.Inc()
+}

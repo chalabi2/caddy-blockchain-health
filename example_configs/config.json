@@ -1,0 +1,488 @@
+{
+  "apps": {
+    "http": {
+      "servers": {
+        "blockchain_api": {
+          "listen": [":8080"],
+          "routes": [
+            {
+              "match": [
+                {
+                  "host": ["cosmos-rpc.example.com"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": {
+                    "source": "blockchain_health",
+                    "source_config": {
+                      "nodes": [
+                        {
+                          "name": "cosmos-validator-1",
+                          "url": "http://cosmos-val-1.internal:26657",
+                          "type": "cosmos",
+                          "weight": 100,
+                          "metadata": {
+                            "region": "us-east-1",
+                            "provider": "validator-service"
+                          }
+                        },
+                        {
+                          "name": "cosmos-validator-2",
+                          "url": "http://cosmos-val-2.internal:26657",
+                          "type": "cosmos",
+                          "weight": 100,
+                          "metadata": {
+                            "region": "us-west-1",
+                            "provider": "validator-service"
+                          }
+                        },
+                        {
+                          "name": "cosmos-archive",
+                          "url": "http://cosmos-archive.internal:26657",
+                          "type": "cosmos",
+                          "weight": 50,
+                          "metadata": {
+                            "type": "archive",
+                            "region": "eu-central-1"
+                          }
+                        }
+                      ],
+                      "external_references": [
+                        {
+                          "name": "cosmos_public_rpc",
+                          "url": "https://cosmos-rpc.publicnode.com",
+                          "type": "cosmos",
+                          "enabled": true
+                        }
+                      ],
+                      "health_check": {
+                        "interval": "10s",
+                        "timeout": "3s",
+                        "retry_attempts": 2,
+                        "retry_delay": "1s"
+                      },
+                      "block_validation": {
+                        "height_threshold": 3,
+                        "external_reference_threshold": 5
+                      },
+                      "performance": {
+                        "cache_duration": "20s",
+                        "max_concurrent_checks": 5
+                      },
+                      "failure_handling": {
+                        "min_healthy_nodes": 1,
+                        "grace_period": "60s",
+                        "circuit_breaker_threshold": 0.75
+                      },
+                      "monitoring": {
+                        "metrics_enabled": true,
+                        "log_level": "info",
+                        "health_endpoint": "/health"
+                      }
+                    }
+                  },
+                  "load_balancing": {
+                    "policy": "least_conn",
+                    "retries": 2,
+                    "try_duration": "5s"
+                  }
+                }
+              ]
+            },
+            {
+              "match": [
+                {
+                  "host": ["cosmos-api.example.com"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": {
+                    "source": "blockchain_health",
+                    "source_config": {
+                      "nodes": [
+                        {
+                          "name": "cosmos-api-1",
+                          "url": "http://cosmos-val-1.internal:1317",
+                          "type": "cosmos",
+                          "weight": 100
+                        },
+                        {
+                          "name": "cosmos-api-2",
+                          "url": "http://cosmos-val-2.internal:1317",
+                          "type": "cosmos",
+                          "weight": 100
+                        },
+                        {
+                          "name": "cosmos-api-archive",
+                          "url": "http://cosmos-archive.internal:1317",
+                          "type": "cosmos",
+                          "weight": 75
+                        }
+                      ],
+                      "external_references": [
+                        {
+                          "name": "cosmos_public_api",
+                          "url": "https://cosmos-rest.publicnode.com",
+                          "type": "cosmos",
+                          "enabled": true
+                        }
+                      ],
+                      "health_check": {
+                        "interval": "15s",
+                        "timeout": "4s",
+                        "retry_attempts": 3,
+                        "retry_delay": "1s"
+                      },
+                      "block_validation": {
+                        "height_threshold": 5,
+                        "external_reference_threshold": 10
+                      },
+                      "performance": {
+                        "cache_duration": "30s",
+                        "max_concurrent_checks": 8
+                      },
+                      "failure_handling": {
+                        "min_healthy_nodes": 1,
+                        "grace_period": "45s",
+                        "circuit_breaker_threshold": 0.8
+                      },
+                      "monitoring": {
+                        "metrics_enabled": true,
+                        "log_level": "info",
+                        "health_endpoint": "/health"
+                      }
+                    }
+                  },
+                  "load_balancing": {
+                    "policy": "round_robin"
+                  }
+                }
+              ]
+            },
+            {
+              "match": [
+                {
+                  "host": ["ethereum-mainnet.example.com"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": {
+                    "source": "blockchain_health",
+                    "source_config": {
+                      "nodes": [
+                        {
+                          "name": "eth-geth-1",
+                          "url": "http://geth-1.internal:8545",
+                          "type": "evm",
+                          "weight": 100,
+                          "metadata": {
+                            "client": "geth",
+                            "version": "v1.13.5"
+                          }
+                        },
+                        {
+                          "name": "eth-erigon-1",
+                          "url": "http://erigon-1.internal:8545",
+                          "type": "evm",
+                          "weight": 100,
+                          "metadata": {
+                            "client": "erigon",
+                            "type": "archive"
+                          }
+                        }
+                      ],
+                      "external_references": [
+                        {
+                          "name": "ethereum_infura",
+                          "url": "https://mainnet.infura.io/v3/YOUR_PROJECT_ID",
+                          "type": "evm",
+                          "enabled": true
+                        }
+                      ],
+                      "health_check": {
+                        "interval": "12s",
+                        "timeout": "5s",
+                        "retry_attempts": 3,
+                        "retry_delay": "1s"
+                      },
+                      "block_validation": {
+                        "height_threshold": 2,
+                        "external_reference_threshold": 5
+                      },
+                      "performance": {
+                        "cache_duration": "25s",
+                        "max_concurrent_checks": 8
+                      },
+                      "failure_handling": {
+                        "min_healthy_nodes": 1,
+                        "grace_period": "45s",
+                        "circuit_breaker_threshold": 0.8
+                      },
+                      "monitoring": {
+                        "metrics_enabled": true,
+                        "log_level": "info",
+                        "health_endpoint": "/health"
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "match": [
+                {
+                  "host": ["multi-chain-api.example.com"],
+                  "path": ["/cosmos/*"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "rewrite",
+                  "strip_path_prefix": "/cosmos"
+                },
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": {
+                    "source": "blockchain_health",
+                    "source_config": {
+                      "nodes": [
+                        {
+                          "name": "cosmos-1",
+                          "url": "http://cosmos-1.internal:26657",
+                          "api_url": "http://cosmos-1.internal:1317",
+                          "type": "cosmos",
+                          "weight": 100
+                        },
+                        {
+                          "name": "cosmos-2",
+                          "url": "http://cosmos-2.internal:26657",
+                          "api_url": "http://cosmos-2.internal:1317",
+                          "type": "cosmos",
+                          "weight": 100
+                        }
+                      ],
+                      "external_references": [
+                        {
+                          "name": "cosmos_backup",
+                          "url": "https://cosmos-rpc.publicnode.com",
+                          "type": "cosmos",
+                          "enabled": true
+                        }
+                      ],
+                      "health_check": {
+                        "interval": "15s",
+                        "timeout": "5s",
+                        "retry_attempts": 3,
+                        "retry_delay": "1s"
+                      },
+                      "block_validation": {
+                        "height_threshold": 5,
+                        "external_reference_threshold": 10
+                      },
+                      "performance": {
+                        "cache_duration": "30s",
+                        "max_concurrent_checks": 10
+                      },
+                      "failure_handling": {
+                        "min_healthy_nodes": 1,
+                        "grace_period": "60s",
+                        "circuit_breaker_threshold": 0.8
+                      },
+                      "monitoring": {
+                        "metrics_enabled": true,
+                        "log_level": "info",
+                        "health_endpoint": "/health"
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "match": [
+                {
+                  "host": ["multi-chain-api.example.com"],
+                  "path": ["/ethereum/*"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "rewrite",
+                  "strip_path_prefix": "/ethereum"
+                },
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": {
+                    "source": "blockchain_health",
+                    "source_config": {
+                      "nodes": [
+                        {
+                          "name": "eth-1",
+                          "url": "http://eth-1.internal:8545",
+                          "type": "evm",
+                          "weight": 100
+                        },
+                        {
+                          "name": "eth-2",
+                          "url": "http://eth-2.internal:8545",
+                          "type": "evm",
+                          "weight": 100
+                        }
+                      ],
+                      "external_references": [
+                        {
+                          "name": "ethereum_backup",
+                          "url": "https://ethereum-rpc.publicnode.com",
+                          "type": "evm",
+                          "enabled": true
+                        }
+                      ],
+                      "health_check": {
+                        "interval": "12s",
+                        "timeout": "5s",
+                        "retry_attempts": 3,
+                        "retry_delay": "1s"
+                      },
+                      "block_validation": {
+                        "height_threshold": 3,
+                        "external_reference_threshold": 5
+                      },
+                      "performance": {
+                        "cache_duration": "25s",
+                        "max_concurrent_checks": 10
+                      },
+                      "failure_handling": {
+                        "min_healthy_nodes": 1,
+                        "grace_period": "60s",
+                        "circuit_breaker_threshold": 0.8
+                      },
+                      "monitoring": {
+                        "metrics_enabled": true,
+                        "log_level": "info",
+                        "health_endpoint": "/health"
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "match": [
+                {
+                  "host": ["dev-blockchain.example.com"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": {
+                    "source": "blockchain_health",
+                    "source_config": {
+                      "nodes": [
+                        {
+                          "name": "local-cosmos",
+                          "url": "http://localhost:26657",
+                          "api_url": "http://localhost:1317",
+                          "type": "cosmos",
+                          "weight": 100
+                        },
+                        {
+                          "name": "local-eth",
+                          "url": "http://localhost:8545",
+                          "type": "evm",
+                          "weight": 100
+                        }
+                      ],
+                      "health_check": {
+                        "interval": "5s",
+                        "timeout": "2s",
+                        "retry_attempts": 1,
+                        "retry_delay": "1s"
+                      },
+                      "block_validation": {
+                        "height_threshold": 10,
+                        "external_reference_threshold": 20
+                      },
+                      "performance": {
+                        "cache_duration": "10s",
+                        "max_concurrent_checks": 3
+                      },
+                      "failure_handling": {
+                        "min_healthy_nodes": 1,
+                        "grace_period": "30s",
+                        "circuit_breaker_threshold": 0.9
+                      },
+                      "monitoring": {
+                        "metrics_enabled": true,
+                        "log_level": "debug",
+                        "health_endpoint": "/health"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "monitoring": {
+          "listen": [":9090"],
+          "routes": [
+            {
+              "match": [
+                {
+                  "host": ["monitoring.example.com"],
+                  "path": ["/metrics"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "metrics"
+                }
+              ]
+            },
+            {
+              "match": [
+                {
+                  "host": ["monitoring.example.com"],
+                  "path": ["/health/*"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [
+                    {
+                      "dial": "cosmos-rpc.example.com:8080"
+                    },
+                    {
+                      "dial": "ethereum-mainnet.example.com:8080"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "match": [
+                {
+                  "host": ["monitoring.example.com"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "static_response",
+                  "body": "Monitoring Dashboard - Access /metrics for Prometheus data"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

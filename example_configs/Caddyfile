@@ -1,0 +1,339 @@
+# Blockchain Health Dynamic Upstream Example Configuration
+# This example shows various configurations for different blockchain services
+
+# Cosmos Hub RPC Load Balancer
+cosmos-rpc.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # Primary Cosmos nodes
+            node cosmos-validator-1 {
+                url "http://cosmos-val-1.internal:26657"
+                type "cosmos"
+                weight 100
+                metadata {
+                    region "us-east-1"
+                    provider "validator-service"
+                }
+            }
+
+            node cosmos-validator-2 {
+                url "http://cosmos-val-2.internal:26657"
+                type "cosmos"
+                weight 100
+                metadata {
+                    region "us-west-1"
+                    provider "validator-service"
+                }
+            }
+
+            node cosmos-archive {
+                url "http://cosmos-archive.internal:26657"
+                type "cosmos"
+                weight 50
+                metadata {
+                    type "archive"
+                    region "eu-central-1"
+                }
+            }
+
+            # Health check configuration
+            check_interval "10s"
+            timeout "3s"
+            retry_attempts 2
+            block_height_threshold 3
+
+            # External validation against public nodes
+            external_reference cosmos {
+                name "cosmos_public_rpc"
+                url "https://cosmos-rpc.publicnode.com"
+                type "cosmos"
+                enabled true
+            }
+
+            # Performance settings
+            cache_duration "20s"
+            max_concurrent_checks 5
+
+            # High availability settings
+            min_healthy_nodes 1
+            circuit_breaker_threshold 0.75
+
+            # Monitoring
+            metrics_enabled true
+            log_level "info"
+        }
+
+        # Load balancing strategy
+        lb_policy least_conn
+        lb_retries 2
+        lb_try_duration 5s
+    }
+
+    # Add CORS headers for browser clients
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type"
+    }
+}
+
+# Cosmos Hub REST API Load Balancer
+cosmos-api.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # REST API nodes (could be same physical nodes)
+            node cosmos-api-1 {
+                url "http://cosmos-val-1.internal:1317"
+                type "cosmos"
+                weight 100
+            }
+
+            node cosmos-api-2 {
+                url "http://cosmos-val-2.internal:1317"
+                type "cosmos"
+                weight 100
+            }
+
+            node cosmos-api-archive {
+                url "http://cosmos-archive.internal:1317"
+                type "cosmos"
+                weight 75
+            }
+
+            # Faster checks for API endpoints
+            check_interval "15s"
+            timeout "4s"
+            block_height_threshold 5
+
+            # External validation
+            external_reference cosmos {
+                name "cosmos_public_api"
+                url "https://cosmos-rest.publicnode.com"
+                type "cosmos"
+                enabled true
+            }
+
+            # API-specific settings
+            cache_duration "30s"
+            min_healthy_nodes 1
+
+            metrics_enabled true
+            log_level "info"
+        }
+
+        lb_policy round_robin
+    }
+
+    # API-specific headers
+    header {
+        Access-Control-Allow-Origin "*"
+        Content-Type "application/json"
+    }
+}
+
+# Ethereum Mainnet Load Balancer
+ethereum-mainnet.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # Multiple Ethereum nodes
+            node eth-geth-1 {
+                url "http://geth-1.internal:8545"
+                type "evm"
+                weight 100
+                metadata {
+                    client "geth"
+                    version "v1.13.5"
+                }
+            }
+
+            node eth-erigon-1 {
+                url "http://erigon-1.internal:8545"
+                type "evm"
+                weight 100
+                metadata {
+                    client "erigon"
+                    type "archive"
+                }
+            }
+
+            # Health check settings
+            check_interval "12s"
+            timeout "5s"
+            block_height_threshold 2
+
+            # External validation against Infura
+            external_reference evm {
+                name "ethereum_infura"
+                url "https://mainnet.infura.io/v3/YOUR_PROJECT_ID"
+                type "evm"
+                enabled true
+            }
+
+            # EVM-specific settings
+            external_reference_threshold 5
+            cache_duration "25s"
+            max_concurrent_checks 8
+
+            # High availability
+            min_healthy_nodes 1
+            grace_period "45s"
+            circuit_breaker_threshold 0.8
+
+            metrics_enabled true
+            log_level "info"
+        }
+
+        # WebSocket upgrade support
+        @websockets {
+            header Connection *Upgrade*
+            header Upgrade websocket
+        }
+        reverse_proxy @websockets {
+            # WebSocket configuration for Ethereum nodes
+            to http://geth-1.internal:8546 http://erigon-1.internal:8546
+        }
+    }
+}
+
+# Multi-Chain Load Balancer (Mixed Protocols)
+multi-chain-api.example.com {
+    # Route based on path
+    route /cosmos/* {
+        reverse_proxy {
+            dynamic blockchain_health {
+                node cosmos-1 {
+                    url "http://cosmos-1.internal:26657"
+                    api_url "http://cosmos-1.internal:1317"
+                    type "cosmos"
+                    weight 100
+                }
+
+                node cosmos-2 {
+                    url "http://cosmos-2.internal:26657"
+                    api_url "http://cosmos-2.internal:1317"
+                    type "cosmos"
+                    weight 100
+                }
+
+                check_interval "15s"
+                timeout "5s"
+                block_height_threshold 5
+
+                external_reference cosmos {
+                    name "cosmos_backup"
+                    url "https://cosmos-rpc.publicnode.com"
+                    type "cosmos"
+                    enabled true
+                }
+
+                cache_duration "30s"
+                min_healthy_nodes 1
+                metrics_enabled true
+            }
+        }
+        # Strip /cosmos prefix
+        uri strip_prefix /cosmos
+    }
+
+    route /ethereum/* {
+        reverse_proxy {
+            dynamic blockchain_health {
+                node eth-1 {
+                    url "http://eth-1.internal:8545"
+                    type "evm"
+                    weight 100
+                }
+
+                node eth-2 {
+                    url "http://eth-2.internal:8545"
+                    type "evm"
+                    weight 100
+                }
+
+                check_interval "12s"
+                timeout "5s"
+                block_height_threshold 3
+
+                external_reference evm {
+                    name "ethereum_backup"
+                    url "https://ethereum-rpc.publicnode.com"
+                    type "evm"
+                    enabled true
+                }
+
+                cache_duration "25s"
+                min_healthy_nodes 1
+                metrics_enabled true
+            }
+        }
+        # Strip /ethereum prefix
+        uri strip_prefix /ethereum
+    }
+
+    # Default route for health checks
+    route /health {
+        respond "Multi-chain API is running" 200
+    }
+}
+
+# Health and Metrics Monitoring
+monitoring.example.com {
+    # Expose Prometheus metrics
+    handle /metrics {
+        metrics
+    }
+
+    # Custom health endpoint
+    handle /health/* {
+        # Route to different service health endpoints
+        reverse_proxy {
+            to http://cosmos-rpc.example.com/health
+            to http://ethereum-mainnet.example.com/health
+        }
+    }
+
+    # Default monitoring dashboard
+    handle {
+        respond "Monitoring Dashboard - Access /metrics for Prometheus data"
+    }
+}
+
+# Development Configuration (with debug logging)
+dev-blockchain.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # Local development nodes
+            node local-cosmos {
+                url "http://localhost:26657"
+                api_url "http://localhost:1317"
+                type "cosmos"
+                weight 100
+            }
+
+            node local-eth {
+                url "http://localhost:8545"
+                type "evm"
+                weight 100
+            }
+
+            # Development settings
+            check_interval "5s"
+            timeout "2s"
+            retry_attempts 1
+            block_height_threshold 10
+
+            # No external references for dev
+            cache_duration "10s"
+            max_concurrent_checks 3
+
+            # Lenient failure handling for dev
+            min_healthy_nodes 1
+            grace_period "30s"
+            circuit_breaker_threshold 0.9
+
+            # Debug logging
+            metrics_enabled true
+            log_level "debug"
+        }
+    }
+}

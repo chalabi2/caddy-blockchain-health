@@ -1,0 +1,76 @@
+{
+  "name": "caddy-blockchain-health",
+  "version": "1.0.0",
+  "description": "Production-ready Caddy dynamic upstream module that intelligently monitors blockchain node health across multiple protocols (Cosmos, EVM) and removes unhealthy nodes from the load balancer pool in real-time",
+  "author": "chalabi",
+  "homepage": "https://github.com/chalabi/caddy-blockchain-health",
+  "repository": "https://github.com/chalabi/caddy-blockchain-health",
+  "license": "MIT",
+  "keywords": [
+    "caddy",
+    "plugin",
+    "blockchain",
+    "health-check",
+    "load-balancer",
+    "cosmos",
+    "ethereum",
+    "evm",
+    "dynamic-upstream",
+    "circuit-breaker",
+    "monitoring",
+    "prometheus",
+    "rpc",
+    "rest-api",
+    "node-health",
+    "failover"
+  ],
+  "caddy": {
+    "module_id": "http.reverse_proxy.upstreams.blockchain_health",
+    "go_module": "github.com/chalabi/caddy-blockchain-health",
+    "directive": "blockchain_health"
+  },
+  "compatibility": {
+    "caddy": ">=2.7.0",
+    "go": ">=1.21"
+  },
+  "features": [
+    "Multi-protocol blockchain node health checking (Cosmos SDK, EVM)",
+    "Intelligent sync status monitoring with catching_up detection",
+    "Block height validation within node pools and against external references",
+    "Circuit breaker pattern for unhealthy node protection",
+    "TTL-based caching with configurable duration",
+    "External reference validation against public providers (Infura, Alchemy)",
+    "Prometheus metrics integration for monitoring and alerting",
+    "Concurrent health checks with configurable rate limiting",
+    "Graceful failure handling with min healthy nodes enforcement",
+    "Production-ready error handling and resilience patterns",
+    "Support for separated RPC/REST services or combined endpoints",
+    "Real-time health status endpoint with detailed diagnostics",
+    "Exponential backoff retry logic with jitter",
+    "Comprehensive structured logging with configurable levels"
+  ],
+  "protocols": {
+    "cosmos": {
+      "rpc_endpoint": "/status",
+      "rest_endpoint": "/cosmos/base/tendermint/v1beta1/syncing",
+      "features": ["sync_status", "block_height", "catching_up_detection"]
+    },
+    "evm": {
+      "rpc_method": "eth_blockNumber",
+      "features": ["block_height", "json_rpc"]
+    }
+  },
+  "architecture": {
+    "pattern": "dynamic_upstream_source",
+    "health_check_engine": "concurrent_with_caching",
+    "failure_handling": "circuit_breaker_with_graceful_degradation",
+    "monitoring": "prometheus_metrics_with_health_endpoint"
+  },
+  "use_cases": [
+    "High-availability blockchain API load balancing",
+    "Cosmos SDK chain RPC/REST endpoint failover",
+    "Ethereum/EVM node pool management",
+    "Multi-chain infrastructure health monitoring",
+    "Production blockchain service reliability"
+  ]
+}

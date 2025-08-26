@@ -1,0 +1,181 @@
+# Blockchain Health Dynamic Upstream - Caddy Plugin
+# .gitignore
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build artifacts
+caddy
+caddy-blockchain
+caddy-blockchain-health
+*.test
+*.prof
+main
+dist/
+build/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+coverage.out
+coverage.txt
+coverage.xml
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# Temporary folders
+tmp/
+temp/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+.classpath
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Log files
+*.log
+logs/
+log/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Configuration files with secrets
+config.local.*
+*.key
+*.pem
+*.crt
+*.p12
+
+# Test and benchmark files
+benchmark.out
+bench.out
+*.bench
+cpu.prof
+mem.prof
+profile.out
+trace.out
+
+# Docker files
+.dockerignore
+docker-compose.override.yml
+.docker/
+
+# Caddy specific
+Caddyfile.local
+caddy.json.local
+*.pid
+
+# Development files
+debug
+debug.test
+debug.out
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Node.js (if any frontend tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archives
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Local development overrides
+local/
+dev/
+*.local
+
+# Performance and profiling
+*.cpuprof
+*.memprof
+*.trace
+
+# Documentation build
+docs/_build/
+site/
+
+# Temporary files from tests
+testdata/tmp/
+test/tmp/
+
+# Cache directories
+.cache/
+*.cache
+
+# Lock files (keep go.sum but ignore others)
+package-lock.json
+yarn.lock
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Certificate files
+*.csr
+
+# Kubernetes
+*.yaml.local
+*.yml.local
+
+# Generated files
+*_generated.go
+
+# Mock files (unless part of the codebase)
+*_mock.go
+
+# Local scripts
+scripts/local_*
+*.local.sh
+
+# Helm charts (if any)
+charts/*/charts/
+charts/*/requirements.lock
+
+# Terraform (if any infrastructure code)
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Local configuration examples
+example_configs/*.local.*
+local_configs/
