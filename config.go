@@ -2,7 +2,10 @@ package blockchain_health
 
 import (
 	"fmt"
+	"net/url"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 )
@@ -137,6 +140,103 @@ func (b *BlockchainHealthUpstream) parseCaddyfile(d *caddyfile.Dispenser) error 
 					return d.ArgErr()
 				}
 				b.Monitoring.HealthEndpoint = d.Val()
+
+			// Environment-based configuration
+			case "servers":
+				servers := []string{}
+				for d.NextArg() {
+					servers = append(servers, d.Val())
+				}
+				b.Environment.Servers = strings.Join(servers, " ")
+
+			case "rpc_servers":
+				servers := []string{}
+				for d.NextArg() {
+					servers = append(servers, d.Val())
+				}
+				b.Environment.RPCServers = strings.Join(servers, " ")
+
+			case "api_servers":
+				servers := []string{}
+				for d.NextArg() {
+					servers = append(servers, d.Val())
+				}
+				b.Environment.APIServers = strings.Join(servers, " ")
+
+			case "websocket_servers":
+				servers := []string{}
+				for d.NextArg() {
+					servers = append(servers, d.Val())
+				}
+				b.Environment.WebSocketServers = strings.Join(servers, " ")
+
+			case "evm_servers":
+				servers := []string{}
+				for d.NextArg() {
+					servers = append(servers, d.Val())
+				}
+				b.Environment.EVMServers = strings.Join(servers, " ")
+
+			case "evm_ws_servers":
+				servers := []string{}
+				for d.NextArg() {
+					servers = append(servers, d.Val())
+				}
+				b.Environment.EVMWSServers = strings.Join(servers, " ")
+
+			// Chain configuration
+			case "chain_type":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				b.Chain.ChainType = d.Val()
+
+			case "chain_preset":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				b.Chain.ChainPreset = d.Val()
+
+			case "auto_discover_from_env":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				b.Chain.AutoDiscoverFromEnv = d.Val()
+
+			case "service_type":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				b.Chain.ServiceType = d.Val()
+
+			// Legacy configuration
+			case "legacy_mode":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				legacyMode, err := strconv.ParseBool(d.Val())
+				if err != nil {
+					return d.Errf("invalid legacy_mode: %v", err)
+				}
+				b.Legacy.LegacyMode = legacyMode
+
+			case "fallback_behavior":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				b.Legacy.FallbackBehavior = d.Val()
+
+			case "required_env_vars":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				b.Legacy.RequiredEnvVars = d.Val()
+
+			case "optional_env_vars":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				b.Legacy.OptionalEnvVars = d.Val()
 
 			default:
 				return d.Errf("unknown directive: %s", d.Val())
@@ -287,4 +387,332 @@ func (b *BlockchainHealthUpstream) parseExternalReference(d *caddyfile.Dispenser
 	}
 
 	return ref, nil
+}
+
+// processEnvironmentConfiguration processes environment-based configuration
+func (b *BlockchainHealthUpstream) processEnvironmentConfiguration() error {
+	// Process auto-discovery from environment variables
+	if b.Chain.AutoDiscoverFromEnv != "" {
+		if err := b.autoDiscoverFromEnvironment(b.Chain.AutoDiscoverFromEnv); err != nil {
+			return fmt.Errorf("auto-discovery failed: %w", err)
+		}
+	}
+
+	// Process individual server lists
+	if err := b.processServerLists(); err != nil {
+		return fmt.Errorf("processing server lists: %w", err)
+	}
+
+	// Apply chain presets
+	if b.Chain.ChainPreset != "" {
+		if err := b.applyChainPreset(b.Chain.ChainPreset); err != nil {
+			return fmt.Errorf("applying chain preset: %w", err)
+		}
+	}
+
+	// Generate external references if not manually configured
+	if len(b.ExternalReferences) == 0 && b.Chain.ChainType != "" {
+		b.generateExternalReferences()
+	}
+
+	return nil
+}
+
+// autoDiscoverFromEnvironment discovers servers from environment variables
+func (b *BlockchainHealthUpstream) autoDiscoverFromEnvironment(prefix string) error {
+	// Look for environment variables like COSMOS_RPC_SERVERS, COSMOS_API_SERVERS, etc.
+	envVars := map[string]string{
+		prefix + "_RPC_SERVERS": "rpc",
+		prefix + "_API_SERVERS": "api",
+		prefix + "_WS_SERVERS":  "websocket",
+		prefix + "_SERVERS":     "generic",
+	}
+
+	for envVar, serviceType := range envVars {
+		if servers := os.Getenv(envVar); servers != "" {
+			if err := b.parseServersFromEnv(servers, serviceType); err != nil {
+				return fmt.Errorf("parsing %s: %w", envVar, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// processServerLists processes individual server list configurations
+func (b *BlockchainHealthUpstream) processServerLists() error {
+	serverConfigs := []struct {
+		servers     string
+		serviceType string
+		chainType   string
+	}{
+		{b.Environment.Servers, "generic", b.Chain.ChainType},
+		{b.Environment.RPCServers, "rpc", "cosmos"},
+		{b.Environment.APIServers, "api", "cosmos"},
+		{b.Environment.WebSocketServers, "websocket", "cosmos"},
+		{b.Environment.EVMServers, "rpc", "evm"},
+		{b.Environment.EVMWSServers, "websocket", "evm"},
+	}
+
+	for _, config := range serverConfigs {
+		if config.servers != "" {
+			chainType := config.chainType
+			if chainType == "" {
+				chainType = b.Chain.ChainType
+			}
+			if err := b.parseServersFromEnv(config.servers, config.serviceType); err != nil {
+				return fmt.Errorf("parsing %s servers: %w", config.serviceType, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// parseServersFromEnv parses a space-separated list of servers and creates nodes
+func (b *BlockchainHealthUpstream) parseServersFromEnv(servers, serviceType string) error {
+	if servers == "" {
+		return nil
+	}
+
+	serverList := strings.Fields(servers)
+	for i, serverURL := range serverList {
+		node, err := b.createNodeFromURL(serverURL, serviceType, i)
+		if err != nil {
+			return fmt.Errorf("creating node from URL %s: %w", serverURL, err)
+		}
+		b.Nodes = append(b.Nodes, node)
+	}
+
+	return nil
+}
+
+// createNodeFromURL creates a node configuration from a URL
+func (b *BlockchainHealthUpstream) createNodeFromURL(serverURL, serviceType string, index int) (NodeConfig, error) {
+	var node NodeConfig
+
+	// Parse URL to extract information
+	parsedURL, err := url.Parse(serverURL)
+	if err != nil {
+		return node, fmt.Errorf("parsing URL: %w", err)
+	}
+
+	// Auto-detect service type and chain type from URL if not specified
+	detectedType, detectedChain := b.autoDetectServiceType(parsedURL)
+
+	if serviceType == "generic" {
+		serviceType = detectedType
+	}
+
+	chainType := b.Chain.ChainType
+	if chainType == "" {
+		chainType = detectedChain
+	}
+
+	// Use detected chain type if chain type is not set or is generic
+	actualNodeType := chainType
+	if chainType == "" || chainType == "dual" {
+		actualNodeType = detectedChain
+	}
+
+	// Generate node name
+	nodeName := b.generateNodeName(chainType, serviceType, index)
+
+	// Create basic node configuration
+	node = NodeConfig{
+		Name:   nodeName,
+		URL:    serverURL,
+		Type:   NodeType(actualNodeType),
+		Weight: 100, // Default weight
+		Metadata: map[string]string{
+			"service_type":   serviceType,
+			"auto_generated": "true",
+			"source":         "environment",
+		},
+	}
+
+	// Auto-generate WebSocket URL if needed
+	if wsURL := b.generateWebSocketURL(parsedURL, actualNodeType); wsURL != "" {
+		node.WebSocketURL = wsURL
+	}
+
+	// Set API URL for Cosmos nodes if this is an RPC endpoint
+	if actualNodeType == "cosmos" && serviceType == "rpc" {
+		if apiURL := b.generateAPIURL(parsedURL); apiURL != "" {
+			node.APIURL = apiURL
+		}
+	}
+
+	return node, nil
+}
+
+// autoDetectServiceType detects service type and chain type from URL
+func (b *BlockchainHealthUpstream) autoDetectServiceType(parsedURL *url.URL) (serviceType, chainType string) {
+	port := parsedURL.Port()
+	path := parsedURL.Path
+
+	switch port {
+	case "26657":
+		return "rpc", "cosmos"
+	case "1317":
+		return "api", "cosmos"
+	case "8545":
+		return "rpc", "evm"
+	case "8546":
+		return "websocket", "evm"
+	}
+
+	// Check path patterns
+	if strings.Contains(path, "/websocket") {
+		return "websocket", "cosmos"
+	}
+	if strings.Contains(path, "/cosmos/") {
+		return "api", "cosmos"
+	}
+
+	// Default fallback
+	return "rpc", "cosmos"
+}
+
+// generateNodeName generates a unique node name
+func (b *BlockchainHealthUpstream) generateNodeName(chainType, serviceType string, index int) string {
+	if chainType == "" {
+		chainType = "blockchain"
+	}
+	if serviceType == "" {
+		serviceType = "node"
+	}
+	return fmt.Sprintf("%s-%s-%d", chainType, serviceType, index)
+}
+
+// generateWebSocketURL generates WebSocket URL from HTTP URL
+func (b *BlockchainHealthUpstream) generateWebSocketURL(parsedURL *url.URL, chainType string) string {
+	if chainType == "cosmos" {
+		// Cosmos: ws://host:26657/websocket
+		wsURL := *parsedURL
+		switch wsURL.Scheme {
+		case "http":
+			wsURL.Scheme = "ws"
+		case "https":
+			wsURL.Scheme = "wss"
+		}
+		wsURL.Path = "/websocket"
+		return wsURL.String()
+	} else if chainType == "evm" {
+		// EVM: ws://host:8546 (different port)
+		wsURL := *parsedURL
+		switch wsURL.Scheme {
+		case "http":
+			wsURL.Scheme = "ws"
+		case "https":
+			wsURL.Scheme = "wss"
+		}
+		// Change port from 8545 to 8546
+		if parsedURL.Port() == "8545" {
+			wsURL.Host = strings.Replace(wsURL.Host, ":8545", ":8546", 1)
+		}
+		wsURL.Path = ""
+		return wsURL.String()
+	}
+
+	return ""
+}
+
+// generateAPIURL generates REST API URL from RPC URL for Cosmos
+func (b *BlockchainHealthUpstream) generateAPIURL(parsedURL *url.URL) string {
+	if parsedURL.Port() == "26657" {
+		apiURL := *parsedURL
+		apiURL.Host = strings.Replace(apiURL.Host, ":26657", ":1317", 1)
+		return apiURL.String()
+	}
+	return ""
+}
+
+// applyChainPreset applies predefined chain configuration
+func (b *BlockchainHealthUpstream) applyChainPreset(preset string) error {
+	switch preset {
+	case "cosmos-hub":
+		b.Chain.ChainType = "cosmos"
+		b.addCosmosHubDefaults()
+	case "ethereum":
+		b.Chain.ChainType = "evm"
+		b.addEthereumDefaults()
+	case "althea":
+		// Don't set chain_type for Althea - let auto-detection handle it
+		// since Cosmos and EVM services run on different ports
+		b.addAltheaDefaults()
+	default:
+		return fmt.Errorf("unknown chain preset: %s", preset)
+	}
+	return nil
+}
+
+// generateExternalReferences generates external references based on chain type
+func (b *BlockchainHealthUpstream) generateExternalReferences() {
+	switch b.Chain.ChainType {
+	case "cosmos":
+		b.ExternalReferences = append(b.ExternalReferences, ExternalReference{
+			Name:    "cosmos_public",
+			URL:     "https://cosmos-rpc.publicnode.com",
+			Type:    NodeTypeCosmos,
+			Enabled: true,
+		})
+	case "evm":
+		b.ExternalReferences = append(b.ExternalReferences, ExternalReference{
+			Name:    "ethereum_public",
+			URL:     "https://ethereum-rpc.publicnode.com",
+			Type:    NodeTypeEVM,
+			Enabled: true,
+		})
+
+	}
+}
+
+// Chain preset helper functions
+func (b *BlockchainHealthUpstream) addCosmosHubDefaults() {
+	// Add Cosmos Hub specific defaults
+	if b.HealthCheck.Interval == "" {
+		b.HealthCheck.Interval = "10s"
+	}
+	if b.BlockValidation.HeightThreshold == 0 {
+		b.BlockValidation.HeightThreshold = 5
+	}
+}
+
+func (b *BlockchainHealthUpstream) addEthereumDefaults() {
+	// Add Ethereum specific defaults
+	if b.HealthCheck.Interval == "" {
+		b.HealthCheck.Interval = "12s"
+	}
+	if b.BlockValidation.HeightThreshold == 0 {
+		b.BlockValidation.HeightThreshold = 2
+	}
+}
+
+func (b *BlockchainHealthUpstream) addAltheaDefaults() {
+	// Add Althea (dual protocol) specific defaults
+	if b.HealthCheck.Interval == "" {
+		b.HealthCheck.Interval = "15s"
+	}
+	if b.BlockValidation.HeightThreshold == 0 {
+		b.BlockValidation.HeightThreshold = 5
+	}
+
+	// Add external references for both Cosmos and EVM protocols if not already configured
+	if len(b.ExternalReferences) == 0 {
+		b.ExternalReferences = append(b.ExternalReferences,
+			ExternalReference{
+				Name:    "cosmos_public",
+				URL:     "https://cosmos-rpc.publicnode.com",
+				Type:    NodeTypeCosmos,
+				Enabled: true,
+			},
+			ExternalReference{
+				Name:    "ethereum_public",
+				URL:     "https://ethereum-rpc.publicnode.com",
+				Type:    NodeTypeEVM,
+				Enabled: true,
+			},
+		)
+	}
 }

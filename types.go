@@ -70,15 +70,49 @@ type MonitoringConfig struct {
 	HealthEndpoint string `json:"health_endpoint"`
 }
 
+// EnvironmentConfig holds environment variable based configuration
+type EnvironmentConfig struct {
+	RPCServers       string `json:"rpc_servers,omitempty"`
+	APIServers       string `json:"api_servers,omitempty"`
+	WebSocketServers string `json:"websocket_servers,omitempty"`
+	EVMServers       string `json:"evm_servers,omitempty"`
+	EVMWSServers     string `json:"evm_ws_servers,omitempty"`
+	Servers          string `json:"servers,omitempty"` // Generic server list
+}
+
+// ChainConfig holds chain-specific configuration
+type ChainConfig struct {
+	ChainType           string `json:"chain_type,omitempty"`             // "cosmos", "evm", "dual"
+	ChainPreset         string `json:"chain_preset,omitempty"`           // "cosmos-hub", "ethereum", "althea"
+	AutoDiscoverFromEnv string `json:"auto_discover_from_env,omitempty"` // "COSMOS" looks for COSMOS_*_SERVERS
+	ServiceType         string `json:"service_type,omitempty"`           // "rpc", "api", "websocket"
+}
+
+// LegacyConfig holds backward compatibility settings
+type LegacyConfig struct {
+	LegacyMode       bool   `json:"legacy_mode,omitempty"`
+	FallbackBehavior string `json:"fallback_behavior,omitempty"` // "disable_health_checks", "fail_startup"
+	RequiredEnvVars  string `json:"required_env_vars,omitempty"`
+	OptionalEnvVars  string `json:"optional_env_vars,omitempty"`
+}
+
 // Config represents the complete module configuration
 type Config struct {
-	Nodes              []NodeConfig          `json:"nodes"`
-	ExternalReferences []ExternalReference   `json:"external_references"`
-	HealthCheck        HealthCheckConfig     `json:"health_check"`
-	BlockValidation    BlockValidationConfig `json:"block_validation"`
-	Performance        PerformanceConfig     `json:"performance"`
-	FailureHandling    FailureHandlingConfig `json:"failure_handling"`
-	Monitoring         MonitoringConfig      `json:"monitoring"`
+	// Traditional node-based configuration
+	Nodes              []NodeConfig        `json:"nodes,omitempty"`
+	ExternalReferences []ExternalReference `json:"external_references,omitempty"`
+
+	// New environment-based configuration
+	Environment EnvironmentConfig `json:"environment,omitempty"`
+	Chain       ChainConfig       `json:"chain,omitempty"`
+	Legacy      LegacyConfig      `json:"legacy,omitempty"`
+
+	// Configuration sections
+	HealthCheck     HealthCheckConfig     `json:"health_check"`
+	BlockValidation BlockValidationConfig `json:"block_validation"`
+	Performance     PerformanceConfig     `json:"performance"`
+	FailureHandling FailureHandlingConfig `json:"failure_handling"`
+	Monitoring      MonitoringConfig      `json:"monitoring"`
 }
 
 // NodeHealth represents the health status of a node
@@ -163,14 +197,21 @@ type HealthChecker struct {
 
 // BlockchainHealthUpstream implements the Caddy UpstreamSource interface
 type BlockchainHealthUpstream struct {
-	// Configuration
-	Nodes              []NodeConfig          `json:"nodes,omitempty"`
-	ExternalReferences []ExternalReference   `json:"external_references,omitempty"`
-	HealthCheck        HealthCheckConfig     `json:"health_check,omitempty"`
-	BlockValidation    BlockValidationConfig `json:"block_validation,omitempty"`
-	Performance        PerformanceConfig     `json:"performance,omitempty"`
-	FailureHandling    FailureHandlingConfig `json:"failure_handling,omitempty"`
-	Monitoring         MonitoringConfig      `json:"monitoring,omitempty"`
+	// Traditional configuration
+	Nodes              []NodeConfig        `json:"nodes,omitempty"`
+	ExternalReferences []ExternalReference `json:"external_references,omitempty"`
+
+	// New environment-based configuration
+	Environment EnvironmentConfig `json:"environment,omitempty"`
+	Chain       ChainConfig       `json:"chain,omitempty"`
+	Legacy      LegacyConfig      `json:"legacy,omitempty"`
+
+	// Configuration sections
+	HealthCheck     HealthCheckConfig     `json:"health_check,omitempty"`
+	BlockValidation BlockValidationConfig `json:"block_validation,omitempty"`
+	Performance     PerformanceConfig     `json:"performance,omitempty"`
+	FailureHandling FailureHandlingConfig `json:"failure_handling,omitempty"`
+	Monitoring      MonitoringConfig      `json:"monitoring,omitempty"`
 
 	// Runtime components
 	config        *Config

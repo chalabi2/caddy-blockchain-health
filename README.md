@@ -64,7 +64,7 @@ Or add to your xcaddy.json:
 
 ## Quick Start
 
-Basic Caddyfile configuration:
+Basic Caddyfile configuration using environment variables:
 
 ```caddy
 {
@@ -74,41 +74,12 @@ Basic Caddyfile configuration:
 blockchain-api.example.com {
     reverse_proxy {
         dynamic blockchain_health {
-            # Cosmos nodes
-            node cosmos-primary {
-                url "http://cosmos-1.internal:26657"
-                api_url "http://cosmos-1.internal:1317"
-                type "cosmos"
-                weight 100
-            }
-
-            node cosmos-backup {
-                url "http://cosmos-2.internal:26657"
-                type "cosmos"
-                weight 75
-            }
-
-            # Ethereum nodes
-            node eth-primary {
-                url "http://eth-1.internal:8545"
-                type "evm"
-                weight 100
-            }
-
-            # Health monitoring
-            check_interval "15s"
-            timeout "5s"
-            block_height_threshold 5
-
-            # External validation
-            external_reference cosmos {
-                name "cosmos_mainnet"
-                url "https://cosmos-rpc.publicnode.com"
-                enabled true
-            }
+            # Cosmos Hub preset with automatic configuration
+            chain_preset "cosmos-hub"
+            servers {$COSMOS_SERVERS}
 
             # Production settings
-            min_healthy_nodes 1
+            min_healthy_nodes 2
             circuit_breaker_threshold 0.8
             metrics_enabled true
         }
@@ -119,6 +90,28 @@ blockchain-api.example.com {
         reverse_proxy localhost:8080
     }
 }
+
+# Ethereum configuration
+ethereum-api.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # Ethereum preset with automatic configuration
+            chain_preset "ethereum"
+            evm_servers {$ETH_SERVERS}
+
+            # Auto-generates WebSocket URLs and external references
+            min_healthy_nodes 1
+            metrics_enabled true
+        }
+    }
+}
+```
+
+Set your environment variables:
+
+```bash
+export COSMOS_SERVERS="http://cosmos-1:26657 http://cosmos-2:26657 http://cosmos-3:26657"
+export ETH_SERVERS="http://eth-1:8545 http://eth-2:8545"
 ```
 
 ## Configuration
@@ -135,35 +128,11 @@ The plugin supports three main usage patterns:
 blockchain-api.example.com {
     reverse_proxy {
         dynamic blockchain_health {
-            # Cosmos nodes with metadata
-            node cosmos-us-east-1 {
-                url "http://cosmos-1.internal:26657"
-                api_url "http://cosmos-1.internal:1317"
-                type "cosmos"
-                weight 100
-                metadata {
-                    region "us-east-1"
-                    provider "aws"
-                }
-            }
+            # Auto-discovery from environment variables
+            auto_discover_from_env "COSMOS"
 
-            node cosmos-eu-west-1 {
-                url "http://cosmos-2.internal:26657"
-                api_url "http://cosmos-2.internal:1317"
-                type "cosmos"
-                weight 100
-                metadata {
-                    region "eu-west-1"
-                    provider "gcp"
-                }
-            }
-
-            # Ethereum nodes
-            node eth-primary {
-                url "http://ethereum-1.internal:8545"
-                type "evm"
-                weight 100
-            }
+            # Additional EVM servers
+            evm_servers {$ETH_SERVERS}
 
             # Comprehensive health monitoring
             check_interval "10s"
@@ -171,27 +140,26 @@ blockchain-api.example.com {
             retry_attempts 3
             block_height_threshold 3
 
-            # External validation
-            external_reference cosmos {
-                name "cosmos_public"
-                url "https://cosmos-rpc.publicnode.com"
-                enabled true
-            }
-
-            external_reference evm {
-                name "ethereum_infura"
-                url "https://mainnet.infura.io/v3/YOUR_PROJECT_ID"
-                enabled true
-            }
-
             # Production resilience
             min_healthy_nodes 2
             circuit_breaker_threshold 0.8
             cache_duration "30s"
             max_concurrent_checks 10
+
+            # Full monitoring
+            metrics_enabled true
         }
     }
 }
+```
+
+Environment variables:
+
+```bash
+export COSMOS_RPC_SERVERS="http://cosmos-us-east-1:26657 http://cosmos-eu-west-1:26657"
+export COSMOS_API_SERVERS="http://cosmos-us-east-1:1317 http://cosmos-eu-west-1:1317"
+export COSMOS_WS_SERVERS="ws://cosmos-us-east-1:26657/websocket ws://cosmos-eu-west-1:26657/websocket"
+export ETH_SERVERS="http://ethereum-1:8545 http://ethereum-2:8545"
 ```
 
 #### 2. **Separated Services** (RPC and REST on different endpoints)
@@ -201,17 +169,9 @@ blockchain-api.example.com {
 cosmos-rpc.example.com {
     reverse_proxy {
         dynamic blockchain_health {
-            node cosmos-rpc-1 {
-                url "http://cosmos-node-1:26657"
-                type "cosmos"
-                weight 100
-            }
-
-            node cosmos-rpc-2 {
-                url "http://cosmos-node-2:26657"
-                type "cosmos"
-                weight 100
-            }
+            rpc_servers {$COSMOS_RPC_SERVERS}
+            chain_type "cosmos"
+            service_type "rpc"
 
             check_interval "15s"
             min_healthy_nodes 1
@@ -224,17 +184,9 @@ cosmos-rpc.example.com {
 cosmos-api.example.com {
     reverse_proxy {
         dynamic blockchain_health {
-            node cosmos-api-1 {
-                url "http://cosmos-node-1:1317"
-                type "cosmos"
-                weight 100
-            }
-
-            node cosmos-api-2 {
-                url "http://cosmos-node-2:1317"
-                type "cosmos"
-                weight 100
-            }
+            api_servers {$COSMOS_API_SERVERS}
+            chain_type "cosmos"
+            service_type "api"
 
             check_interval "15s"
             min_healthy_nodes 1
@@ -244,35 +196,41 @@ cosmos-api.example.com {
 }
 ```
 
+Environment variables:
+
+```bash
+export COSMOS_RPC_SERVERS="http://cosmos-node-1:26657 http://cosmos-node-2:26657"
+export COSMOS_API_SERVERS="http://cosmos-node-1:1317 http://cosmos-node-2:1317"
+```
+
 #### 3. **Development Configuration**
 
 ```caddy
 dev-blockchain.localhost {
     reverse_proxy {
         dynamic blockchain_health {
-            # Local development nodes
-            node local-cosmos {
-                url "http://localhost:26657"
-                api_url "http://localhost:1317"
-                type "cosmos"
-                weight 100
-            }
-
-            node local-eth {
-                url "http://localhost:8545"
-                type "evm"
-                weight 100
-            }
+            # Generic server list with auto-detection
+            servers {$DEV_SERVERS}
 
             # Relaxed settings for development
             check_interval "5s"
             timeout "2s"
             block_height_threshold 10
             circuit_breaker_threshold 0.9
+            fallback_behavior "disable_health_checks"
             log_level "debug"
+
+            # No minimum nodes required in development
+            min_healthy_nodes 0
         }
     }
 }
+```
+
+Environment variables:
+
+```bash
+export DEV_SERVERS="http://localhost:26657 http://localhost:1317 http://localhost:8545"
 ```
 
 ### ⚠️ **Important: Service Separation Behavior**
@@ -287,7 +245,24 @@ dev-blockchain.localhost {
 
 ### Configuration Options
 
-#### Node Settings
+#### 🌟 **Environment Variable Configuration** (Recommended)
+
+The plugin now supports simplified environment variable-based configuration:
+
+| Option                   | Description                                                         | Example                 |
+| ------------------------ | ------------------------------------------------------------------- | ----------------------- |
+| `servers`                | Generic space-separated server list with auto-detection             | `{$BLOCKCHAIN_SERVERS}` |
+| `rpc_servers`            | Cosmos RPC servers (port 26657)                                     | `{$COSMOS_RPC_SERVERS}` |
+| `api_servers`            | Cosmos REST API servers (port 1317)                                 | `{$COSMOS_API_SERVERS}` |
+| `websocket_servers`      | Cosmos WebSocket servers                                            | `{$COSMOS_WS_SERVERS}`  |
+| `evm_servers`            | EVM JSON-RPC servers (port 8545)                                    | `{$ETH_SERVERS}`        |
+| `evm_ws_servers`         | EVM WebSocket servers (port 8546)                                   | `{$ETH_WS_SERVERS}`     |
+| `chain_preset`           | Predefined chain configuration (`cosmos-hub`, `ethereum`, `althea`) | `"cosmos-hub"`          |
+| `auto_discover_from_env` | Auto-discover from environment variables with prefix                | `"COSMOS"`              |
+| `chain_type`             | Blockchain type (`cosmos`, `evm`)                                   | `"cosmos"`              |
+| `legacy_mode`            | Backward compatibility mode                                         | `true`                  |
+
+#### Traditional Node Settings (Legacy)
 
 | Option          | Description                                             | Default | Required |
 | --------------- | ------------------------------------------------------- | ------- | -------- |
@@ -306,12 +281,25 @@ The plugin intelligently handles Cosmos SDK chains with separate RPC and REST en
 **Scenario 1: Combined Node (Single Service)**
 
 ```caddy
-node cosmos-combined {
-    url "http://cosmos-node:26657"          # RPC endpoint
-    api_url "http://cosmos-node:1317"       # REST API endpoint
-    type "cosmos"
-    weight 100
+cosmos-combined.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # Auto-discovery will find both RPC and API servers
+            auto_discover_from_env "COSMOS"
+
+            # Or specify both explicitly
+            rpc_servers {$COSMOS_RPC_SERVERS}
+            api_servers {$COSMOS_API_SERVERS}
+        }
+    }
 }
+```
+
+Environment variables:
+
+```bash
+export COSMOS_RPC_SERVERS="http://cosmos-node:26657"
+export COSMOS_API_SERVERS="http://cosmos-node:1317"
 ```
 
 - ✅ **Health checks RPC first, REST as fallback** - Tries RPC (`/status`), then REST (`/cosmos/base/tendermint/v1beta1/syncing`) if RPC fails
@@ -325,14 +313,9 @@ node cosmos-combined {
 cosmos-rpc.example.com {
     reverse_proxy {
         dynamic blockchain_health {
-            node rpc-1 {
-                url "http://cosmos-rpc-1:26657"    # Only RPC
-                type "cosmos"
-            }
-            node rpc-2 {
-                url "http://cosmos-rpc-2:26657"    # Only RPC
-                type "cosmos"
-            }
+            rpc_servers {$COSMOS_RPC_SERVERS}    # Only RPC
+            chain_type "cosmos"
+            service_type "rpc"
         }
     }
 }
@@ -341,17 +324,19 @@ cosmos-rpc.example.com {
 cosmos-api.example.com {
     reverse_proxy {
         dynamic blockchain_health {
-            node api-1 {
-                url "http://cosmos-api-1:1317"     # Only REST
-                type "cosmos"
-            }
-            node api-2 {
-                url "http://cosmos-api-2:1317"     # Only REST
-                type "cosmos"
-            }
+            api_servers {$COSMOS_API_SERVERS}    # Only REST
+            chain_type "cosmos"
+            service_type "api"
         }
     }
 }
+```
+
+Environment variables:
+
+```bash
+export COSMOS_RPC_SERVERS="http://cosmos-rpc-1:26657 http://cosmos-rpc-2:26657"
+export COSMOS_API_SERVERS="http://cosmos-api-1:1317 http://cosmos-api-2:1317"
 ```
 
 - ✅ **Health checks appropriate endpoint** - RPC or REST based on URL pattern
@@ -371,13 +356,27 @@ The plugin provides comprehensive WebSocket support for real-time blockchain con
 **Cosmos WebSocket Configuration:**
 
 ```caddy
-node cosmos-websocket {
-    url "http://cosmos-node:26657"
-    api_url "http://cosmos-node:1317"
-    websocket_url "ws://cosmos-node:26657/websocket"
-    type "cosmos"
-    weight 100
+cosmos-websocket.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # Auto-discovery generates WebSocket URLs automatically
+            auto_discover_from_env "COSMOS"
+
+            # Or specify explicit WebSocket servers
+            websocket_servers {$COSMOS_WS_SERVERS}
+            chain_type "cosmos"
+            service_type "websocket"
+        }
+    }
 }
+```
+
+Environment variables:
+
+```bash
+export COSMOS_RPC_SERVERS="http://cosmos-node:26657"
+export COSMOS_API_SERVERS="http://cosmos-node:1317"
+export COSMOS_WS_SERVERS="ws://cosmos-node:26657/websocket"
 ```
 
 - ✅ **Tendermint WebSocket subscriptions** - Tests `tm.event = 'NewBlock'` subscriptions
@@ -387,12 +386,25 @@ node cosmos-websocket {
 **EVM WebSocket Configuration:**
 
 ```caddy
-node ethereum-websocket {
-    url "http://geth-node:8545"
-    websocket_url "ws://geth-node:8546"
-    type "evm"
-    weight 100
+ethereum-websocket.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # Auto-generates WebSocket URLs from HTTP URLs
+            evm_servers {$ETH_SERVERS}
+            chain_type "evm"
+
+            # Or specify explicit WebSocket servers
+            evm_ws_servers {$ETH_WS_SERVERS}
+        }
+    }
 }
+```
+
+Environment variables:
+
+```bash
+export ETH_SERVERS="http://geth-node:8545"
+export ETH_WS_SERVERS="ws://geth-node:8546"
 ```
 
 - ✅ **JSON-RPC WebSocket** - Tests `eth_subscribe` for `newHeads` subscriptions
@@ -413,15 +425,25 @@ EVM nodes use JSON-RPC protocol and don't have separate RPC/REST endpoints like 
 **Standard EVM Configuration:**
 
 ```caddy
-node ethereum-primary {
-    url "http://ethereum-node:8545"    # JSON-RPC endpoint
-    type "evm"
-    weight 100
-    metadata {
-        client "geth"
-        sync_mode "full"
+ethereum-primary.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # Ethereum preset with auto-configuration
+            chain_preset "ethereum"
+            evm_servers {$ETH_SERVERS}
+
+            # Auto-generates WebSocket URLs and external references
+            min_healthy_nodes 1
+            metrics_enabled true
+        }
     }
 }
+```
+
+Environment variables:
+
+```bash
+export ETH_SERVERS="http://ethereum-node:8545"
 ```
 
 - ✅ **Single endpoint** - All requests use JSON-RPC over HTTP
@@ -431,38 +453,27 @@ node ethereum-primary {
 **EVM Service Types (by function, not protocol):**
 
 ```caddy
-# Archive node for historical data
-node ethereum-archive {
-    url "http://archive-node:8545"
-    type "evm"
-    weight 50
-    metadata {
-        type "archive"
-        retention "full_history"
-    }
-}
+ethereum-mixed.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # Mixed node types with different capabilities
+            evm_servers {$ETH_ARCHIVE_SERVERS} {$ETH_FULL_SERVERS} {$ETH_LIGHT_SERVERS}
+            chain_type "evm"
 
-# Full node for current state
-node ethereum-full {
-    url "http://full-node:8545"
-    type "evm"
-    weight 100
-    metadata {
-        type "full"
-        retention "recent_blocks"
+            # Standard EVM health checking
+            check_interval "12s"
+            block_height_threshold 2
+        }
     }
 }
+```
 
-# Light client for basic queries
-node ethereum-light {
-    url "http://light-node:8545"
-    type "evm"
-    weight 75
-    metadata {
-        type "light"
-        retention "minimal"
-    }
-}
+Environment variables:
+
+```bash
+export ETH_ARCHIVE_SERVERS="http://archive-node:8545"
+export ETH_FULL_SERVERS="http://full-node:8545"
+export ETH_LIGHT_SERVERS="http://light-node:8545"
 ```
 
 **Key Differences from Cosmos:**
@@ -486,27 +497,18 @@ Compares nodes within the same pool and **removes lagging nodes** from the load 
 ```caddy
 dynamic blockchain_health {
     # These nodes will be compared against each other
-    node eth-node-1 {
-        url "http://eth-1.internal:8545"
-        type "evm"
-        weight 100
-    }
-
-    node eth-node-2 {
-        url "http://eth-2.internal:8545"
-        type "evm"
-        weight 100
-    }
-
-    node eth-node-3 {
-        url "http://eth-3.internal:8545"
-        type "evm"
-        weight 100
-    }
+    evm_servers {$ETH_POOL_SERVERS}
+    chain_type "evm"
 
     # If any node is more than 5 blocks behind the highest in the pool
     block_height_threshold 5
 }
+```
+
+Environment variables:
+
+```bash
+export ETH_POOL_SERVERS="http://eth-1.internal:8545 http://eth-2.internal:8545 http://eth-3.internal:8545"
 ```
 
 **Logic**: If `eth-node-1` is at block 18,500,000 and `eth-node-2` is at 18,499,994, then `eth-node-2` is **removed from load balancer** (6 blocks behind > threshold of 5).
@@ -519,13 +521,14 @@ Monitors your nodes against trusted external sources **for observability** (does
 
 ```caddy
 dynamic blockchain_health {
-    node your-eth-node {
-        url "http://your-node:8545"
-        type "evm"
-        weight 100
-    }
+    # Your nodes
+    evm_servers {$YOUR_ETH_SERVERS}
+    chain_type "evm"
 
-    # Compare against external trusted sources
+    # Automatically configured external references when using preset
+    chain_preset "ethereum"
+
+    # Or manually configure external references
     external_reference evm {
         name "infura_mainnet"
         url "https://mainnet.infura.io/v3/YOUR_PROJECT_ID"
@@ -549,85 +552,109 @@ dynamic blockchain_health {
 }
 ```
 
+Environment variables:
+
+```bash
+export YOUR_ETH_SERVERS="http://your-node:8545"
+```
+
 **Multi-Chain EVM Examples:**
 
 ```caddy
 # Polygon network
-dynamic blockchain_health {
-    node polygon-node {
-        url "http://polygon-node:8545"
-        type "evm"
-    }
+polygon.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            evm_servers {$POLYGON_SERVERS}
+            chain_type "evm"
 
-    external_reference evm {
-        name "polygon_alchemy"
-        url "https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
-        enabled true
-    }
+            external_reference evm {
+                name "polygon_alchemy"
+                url "https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
+                enabled true
+            }
 
-    external_reference evm {
-        name "polygon_public"
-        url "https://polygon-rpc.com"
-        enabled true
+            external_reference evm {
+                name "polygon_public"
+                url "https://polygon-rpc.com"
+                enabled true
+            }
+        }
     }
 }
 
 # Binance Smart Chain
-dynamic blockchain_health {
-    node bsc-node {
-        url "http://bsc-node:8545"
-        type "evm"
-    }
+bsc.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            evm_servers {$BSC_SERVERS}
+            chain_type "evm"
 
-    external_reference evm {
-        name "bsc_public"
-        url "https://bsc-dataseed.binance.org"
-        enabled true
-    }
+            external_reference evm {
+                name "bsc_public"
+                url "https://bsc-dataseed.binance.org"
+                enabled true
+            }
 
-    external_reference evm {
-        name "bsc_backup"
-        url "https://bsc-dataseed1.defibit.io"
-        enabled true
+            external_reference evm {
+                name "bsc_backup"
+                url "https://bsc-dataseed1.defibit.io"
+                enabled true
+            }
+        }
     }
 }
 
 # Arbitrum network
-dynamic blockchain_health {
-    node arbitrum-node {
-        url "http://arbitrum-node:8545"
-        type "evm"
-    }
+arbitrum.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            evm_servers {$ARBITRUM_SERVERS}
+            chain_type "evm"
 
-    external_reference evm {
-        name "arbitrum_alchemy"
-        url "https://arb-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
-        enabled true
+            external_reference evm {
+                name "arbitrum_alchemy"
+                url "https://arb-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
+                enabled true
+            }
+        }
     }
 }
+```
+
+Environment variables:
+
+```bash
+export POLYGON_SERVERS="http://polygon-node:8545"
+export BSC_SERVERS="http://bsc-node:8545"
+export ARBITRUM_SERVERS="http://arbitrum-node:8545"
 ```
 
 **Cosmos External References:**
 
 ```caddy
-dynamic blockchain_health {
-    node cosmos-node {
-        url "http://cosmos-node:26657"
-        type "cosmos"
-    }
+cosmos-external.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # Cosmos Hub preset automatically includes external references
+            chain_preset "cosmos-hub"
+            servers {$COSMOS_SERVERS}
 
-    external_reference cosmos {
-        name "cosmos_public"
-        url "https://cosmos-rpc.publicnode.com"
-        enabled true
-    }
-
-    external_reference cosmos {
-        name "cosmos_polkachu"
-        url "https://cosmos-rpc.polkachu.com"
-        enabled true
+            # Or add custom external references
+            external_reference cosmos {
+                name "cosmos_polkachu"
+                url "https://cosmos-rpc.polkachu.com"
+                enabled true
+            }
+        }
     }
 }
+```
+
+Environment variables:
+
+```bash
+export COSMOS_SERVERS="http://cosmos-node:26657"
 ```
 
 ##### **Validation Flow:**
@@ -887,7 +914,32 @@ api.example.com {
 }
 ```
 
-### After (Blockchain-Aware)
+### After (Environment Variable Approach)
+
+```caddy
+api.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # Chain preset with automatic configuration
+            chain_preset "cosmos-hub"
+            servers {$COSMOS_SERVERS}
+
+            # Enhanced settings
+            check_interval "15s"
+            block_height_threshold 5
+            metrics_enabled true
+        }
+    }
+}
+```
+
+Environment variables:
+
+```bash
+export COSMOS_SERVERS="http://node1:26657 http://node2:26657"
+```
+
+### Legacy Node-Based Approach (Still Supported)
 
 ```caddy
 api.example.com {
@@ -913,7 +965,16 @@ api.example.com {
 }
 ```
 
-**Benefits**:
+**Benefits of Environment Variable Approach**:
+
+- ✅ **Simplified configuration** - No manual node definitions
+- ✅ **Auto-discovery** - Automatic detection of service types
+- ✅ **Chain presets** - Predefined configurations for major blockchains
+- ✅ **WebSocket auto-generation** - Automatic WebSocket URL creation
+- ✅ **Environment integration** - Better CI/CD and deployment workflows
+- ✅ **Backward compatibility** - Legacy mode for existing configurations
+
+**Benefits of Blockchain-Aware Health Checks**:
 
 - ✅ **Protocol-specific validation** (sync status, block height)
 - ✅ **Intelligent failover** based on blockchain health

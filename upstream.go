@@ -90,12 +90,28 @@ func (b *BlockchainHealthUpstream) provision(ctx caddy.Context) error {
 	b.config = &Config{
 		Nodes:              b.Nodes,
 		ExternalReferences: b.ExternalReferences,
+		Environment:        b.Environment,
+		Chain:              b.Chain,
+		Legacy:             b.Legacy,
 		HealthCheck:        b.HealthCheck,
 		BlockValidation:    b.BlockValidation,
 		Performance:        b.Performance,
 		FailureHandling:    b.FailureHandling,
 		Monitoring:         b.Monitoring,
 	}
+
+	// Process environment-based configuration before setting defaults
+	if err := b.processEnvironmentConfiguration(); err != nil {
+		if b.Legacy.FallbackBehavior == "fail_startup" {
+			return fmt.Errorf("environment configuration failed: %w", err)
+		}
+		b.logger.Warn("environment configuration failed, disabling health checks", zap.Error(err))
+		b.Legacy.LegacyMode = true
+	}
+
+	// Update config with processed nodes
+	b.config.Nodes = b.Nodes
+	b.config.ExternalReferences = b.ExternalReferences
 
 	// Set default values
 	if err := b.setDefaults(); err != nil {
@@ -133,12 +149,31 @@ func (b *BlockchainHealthUpstream) provision(ctx caddy.Context) error {
 
 // validate ensures the configuration is valid
 func (b *BlockchainHealthUpstream) validate() error {
-	if len(b.config.Nodes) == 0 {
-		return fmt.Errorf("at least one node must be configured")
+	// Temporarily process environment configuration for validation
+	// This is safe because it doesn't modify persistent state
+	tempNodes := make([]NodeConfig, len(b.Nodes))
+	copy(tempNodes, b.Nodes)
+
+	// Process environment configuration to generate nodes for validation
+	if err := b.processEnvironmentConfiguration(); err != nil {
+		// If environment processing fails, only fail if no nodes are manually configured
+		if len(b.Nodes) == 0 {
+			return fmt.Errorf("no nodes configured and environment configuration failed: %w", err)
+		}
 	}
 
+	// Now validate that we have at least one node
+	if len(b.Nodes) == 0 {
+		return fmt.Errorf("at least one node must be configured (either manually or via environment variables)")
+	}
+
+	// Restore original nodes for actual provisioning later
+	defer func() {
+		b.Nodes = tempNodes
+	}()
+
 	// Validate node configurations
-	for i, node := range b.config.Nodes {
+	for i, node := range b.Nodes {
 		if node.Name == "" {
 			return fmt.Errorf("node %d: name is required", i)
 		}
@@ -166,7 +201,7 @@ func (b *BlockchainHealthUpstream) validate() error {
 	}
 
 	// Validate external references
-	for i, ref := range b.config.ExternalReferences {
+	for i, ref := range b.ExternalReferences {
 		if ref.Name == "" {
 			return fmt.Errorf("external reference %d: name is required", i)
 		}
@@ -184,24 +219,34 @@ func (b *BlockchainHealthUpstream) validate() error {
 	}
 
 	// Validate timing configurations
-	if _, err := time.ParseDuration(b.config.HealthCheck.Interval); err != nil {
-		return fmt.Errorf("invalid check interval: %w", err)
+	if b.HealthCheck.Interval != "" {
+		if _, err := time.ParseDuration(b.HealthCheck.Interval); err != nil {
+			return fmt.Errorf("invalid check interval: %w", err)
+		}
 	}
-	if _, err := time.ParseDuration(b.config.HealthCheck.Timeout); err != nil {
-		return fmt.Errorf("invalid timeout: %w", err)
+	if b.HealthCheck.Timeout != "" {
+		if _, err := time.ParseDuration(b.HealthCheck.Timeout); err != nil {
+			return fmt.Errorf("invalid timeout: %w", err)
+		}
 	}
-	if _, err := time.ParseDuration(b.config.HealthCheck.RetryDelay); err != nil {
-		return fmt.Errorf("invalid retry delay: %w", err)
+	if b.HealthCheck.RetryDelay != "" {
+		if _, err := time.ParseDuration(b.HealthCheck.RetryDelay); err != nil {
+			return fmt.Errorf("invalid retry delay: %w", err)
+		}
 	}
-	if _, err := time.ParseDuration(b.config.Performance.CacheDuration); err != nil {
-		return fmt.Errorf("invalid cache duration: %w", err)
+	if b.Performance.CacheDuration != "" {
+		if _, err := time.ParseDuration(b.Performance.CacheDuration); err != nil {
+			return fmt.Errorf("invalid cache duration: %w", err)
+		}
 	}
-	if _, err := time.ParseDuration(b.config.FailureHandling.GracePeriod); err != nil {
-		return fmt.Errorf("invalid grace period: %w", err)
+	if b.FailureHandling.GracePeriod != "" {
+		if _, err := time.ParseDuration(b.FailureHandling.GracePeriod); err != nil {
+			return fmt.Errorf("invalid grace period: %w", err)
+		}
 	}
 
 	// Validate thresholds
-	if b.config.FailureHandling.CircuitBreakerThreshold <= 0 || b.config.FailureHandling.CircuitBreakerThreshold > 1 {
+	if b.FailureHandling.CircuitBreakerThreshold != 0 && (b.FailureHandling.CircuitBreakerThreshold <= 0 || b.FailureHandling.CircuitBreakerThreshold > 1) {
 		return fmt.Errorf("circuit breaker threshold must be between 0 and 1")
 	}
 
