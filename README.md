@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/chalabi2/caddy-blockchain-health)](https://goreportcard.com/report/github.com/chalabi2/caddy-blockchain-health)
 [![Go Reference](https://pkg.go.dev/badge/github.com/chalabi2/caddy-blockchain-health.svg)](https://pkg.go.dev/github.com/chalabi2/caddy-blockchain-health)
 
-A comprehensive production-ready Caddy dynamic upstream module that intelligently monitors blockchain node health across multiple protocols (Cosmos, EVM) and removes unhealthy nodes from the load balancer pool in real-time. This plugin provides intelligent failover capabilities for blockchain infrastructure, ensuring high availability and optimal performance.
+A Caddy dynamic upstream module that intelligently monitors blockchain node health across multiple protocols (Cosmos, EVM) and removes unhealthy nodes from the load balancer pool in real-time. This plugin provides intelligent failover capabilities for blockchain infrastructure, ensuring high availability and optimal performance.
 
 > **Note**
 >
