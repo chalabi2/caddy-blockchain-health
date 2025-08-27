@@ -14,7 +14,7 @@ help: ## Show this help message
 
 # Build variables
 GO_VERSION := 1.21
-MODULE_NAME := github.com/chalabi/caddy-blockchain-health
+MODULE_NAME := github.com/chalabi2/caddy-blockchain-health
 BINARY_NAME := caddy-blockchain-health
 COVERAGE_FILE := coverage.out
 BENCHMARK_FILE := benchmark.out

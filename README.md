@@ -1,8 +1,8 @@
 # Blockchain Health Dynamic Upstream
 
-[![codecov](https://codecov.io/gh/chalabi/caddy-blockchain-health/branch/main/graph/badge.svg)](https://codecov.io/gh/chalabi/caddy-blockchain-health)
-[![Go Report Card](https://goreportcard.com/badge/github.com/chalabi/caddy-blockchain-health)](https://goreportcard.com/report/github.com/chalabi/caddy-blockchain-health)
-[![Go Reference](https://pkg.go.dev/badge/github.com/chalabi/caddy-blockchain-health.svg)](https://pkg.go.dev/github.com/chalabi/caddy-blockchain-health)
+[![codecov](https://codecov.io/gh/chalabi2/caddy-blockchain-health/branch/main/graph/badge.svg)](https://codecov.io/gh/chalabi2/caddy-blockchain-health)
+[![Go Report Card](https://goreportcard.com/badge/github.com/chalabi2/caddy-blockchain-health)](https://goreportcard.com/report/github.com/chalabi2/caddy-blockchain-health)
+[![Go Reference](https://pkg.go.dev/badge/github.com/chalabi2/caddy-blockchain-health.svg)](https://pkg.go.dev/github.com/chalabi2/caddy-blockchain-health)
 
 A comprehensive production-ready Caddy dynamic upstream module that intelligently monitors blockchain node health across multiple protocols (Cosmos, EVM) and removes unhealthy nodes from the load balancer pool in real-time. This plugin provides intelligent failover capabilities for blockchain infrastructure, ensuring high availability and optimal performance.
 
@@ -49,7 +49,7 @@ A comprehensive production-ready Caddy dynamic upstream module that intelligentl
 Build Caddy with this plugin using xcaddy:
 
 ```bash
-xcaddy build --with github.com/chalabi/caddy-blockchain-health
+xcaddy build --with github.com/chalabi2/caddy-blockchain-health
 ```
 
 > **Migration Note**: This module replaces traditional HTTP health checks with blockchain-aware monitoring. The directive is `dynamic blockchain_health` within reverse proxy configurations.
@@ -60,7 +60,7 @@ Or add to your xcaddy.json:
 {
   "dependencies": [
     {
-      "module": "github.com/chalabi/caddy-blockchain-health",
+      "module": "github.com/chalabi2/caddy-blockchain-health",
       "version": "latest"
     }
   ]
@@ -465,7 +465,7 @@ This design ensures:
 ### Setup Development Environment
 
 ```bash
-git clone https://github.com/chalabi/caddy-blockchain-health
+git clone https://github.com/chalabi2/caddy-blockchain-health
 cd caddy-blockchain-health
 make dev-setup
 ```

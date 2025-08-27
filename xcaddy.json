@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "Production-ready Caddy dynamic upstream module that intelligently monitors blockchain node health across multiple protocols (Cosmos, EVM) and removes unhealthy nodes from the load balancer pool in real-time",
   "author": "chalabi",
-  "homepage": "https://github.com/chalabi/caddy-blockchain-health",
-  "repository": "https://github.com/chalabi/caddy-blockchain-health",
+  "homepage": "https://github.com/chalabi2/caddy-blockchain-health",
+  "repository": "https://github.com/chalabi2/caddy-blockchain-health",
   "license": "MIT",
   "keywords": [
     "caddy",
@@ -26,7 +26,7 @@
   ],
   "caddy": {
     "module_id": "http.reverse_proxy.upstreams.blockchain_health",
-    "go_module": "github.com/chalabi/caddy-blockchain-health",
+    "go_module": "github.com/chalabi2/caddy-blockchain-health",
     "directive": "blockchain_health"
   },
   "compatibility": {

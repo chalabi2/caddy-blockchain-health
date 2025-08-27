@@ -1,4 +1,4 @@
-module github.com/chalabi/caddy-blockchain-health
+module github.com/chalabi2/caddy-blockchain-health
 
 go 1.21
 
