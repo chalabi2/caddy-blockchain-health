@@ -6,12 +6,7 @@
 
 A Caddy dynamic upstream module that intelligently monitors blockchain node health across multiple protocols (Cosmos, EVM) and removes unhealthy nodes from the load balancer pool in real-time. This plugin provides intelligent failover capabilities for blockchain infrastructure, ensuring high availability and optimal performance.
 
-> **Note**
->
-> This plugin addresses the critical need for blockchain-aware load balancing by implementing protocol-specific health checks, sync status monitoring, and block height validation that traditional HTTP health checks cannot provide.
-
-> **Note**
->
+> [!NOTE]  
 > This is not an official repository of the Caddy Web Server organization.
 
 ## Features
