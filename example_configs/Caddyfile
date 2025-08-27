@@ -46,7 +46,6 @@ cosmos-rpc.example.com {
             external_reference cosmos {
                 name "cosmos_public_rpc"
                 url "https://cosmos-rpc.publicnode.com"
-                type "cosmos"
                 enabled true
             }
 
@@ -109,7 +108,6 @@ cosmos-api.example.com {
             external_reference cosmos {
                 name "cosmos_public_api"
                 url "https://cosmos-rest.publicnode.com"
-                type "cosmos"
                 enabled true
             }
 
@@ -165,7 +163,6 @@ ethereum-mainnet.example.com {
             external_reference evm {
                 name "ethereum_infura"
                 url "https://mainnet.infura.io/v3/YOUR_PROJECT_ID"
-                type "evm"
                 enabled true
             }
 
@@ -222,7 +219,6 @@ multi-chain-api.example.com {
                 external_reference cosmos {
                     name "cosmos_backup"
                     url "https://cosmos-rpc.publicnode.com"
-                    type "cosmos"
                     enabled true
                 }
 
@@ -257,7 +253,6 @@ multi-chain-api.example.com {
                 external_reference evm {
                     name "ethereum_backup"
                     url "https://ethereum-rpc.publicnode.com"
-                    type "evm"
                     enabled true
                 }
 
