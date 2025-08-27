@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
 
@@ -78,6 +80,18 @@ func (c *CosmosHandler) CheckHealth(ctx context.Context, node NodeConfig) (*Node
 			health.LastError = err.Error()
 			health.ResponseTime = time.Since(start)
 			return health, nil // Don't return error, just mark as unhealthy
+		}
+	}
+
+	// Additionally check WebSocket if configured
+	if node.WebSocketURL != "" {
+		wsHealthy := c.checkWebSocketHealth(ctx, node.WebSocketURL)
+		if !wsHealthy {
+			c.logger.Debug("WebSocket health check failed",
+				zap.String("node", node.Name),
+				zap.String("websocket_url", node.WebSocketURL))
+			// WebSocket failure doesn't make the node unhealthy if HTTP works
+			// but we log it for monitoring
 		}
 	}
 
@@ -194,6 +208,71 @@ func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (ui
 	return height, syncStatus.Syncing, nil
 }
 
+// checkWebSocketHealth tests WebSocket connectivity for Cosmos nodes
+func (c *CosmosHandler) checkWebSocketHealth(ctx context.Context, wsURL string) bool {
+	// Parse and validate WebSocket URL
+	u, err := url.Parse(wsURL)
+	if err != nil {
+		c.logger.Debug("Invalid WebSocket URL", zap.String("url", wsURL), zap.Error(err))
+		return false
+	}
+
+	// Convert http/https to ws/wss
+	switch u.Scheme {
+	case "http":
+		u.Scheme = "ws"
+	case "https":
+		u.Scheme = "wss"
+	case "ws", "wss":
+		// Already correct
+	default:
+		c.logger.Debug("Unsupported WebSocket scheme", zap.String("scheme", u.Scheme))
+		return false
+	}
+
+	// Create dialer with timeout
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 5 * time.Second,
+	}
+
+	// Attempt WebSocket connection
+	conn, _, err := dialer.DialContext(ctx, u.String(), nil)
+	if err != nil {
+		c.logger.Debug("WebSocket connection failed", zap.String("url", u.String()), zap.Error(err))
+		return false
+	}
+	defer conn.Close()
+
+	// Test with a simple Cosmos WebSocket subscription
+	testMsg := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  "subscribe",
+		"id":      1,
+		"params": map[string]interface{}{
+			"query": "tm.event = 'NewBlock'",
+		},
+	}
+
+	// Send test message
+	if err := conn.WriteJSON(testMsg); err != nil {
+		c.logger.Debug("WebSocket write failed", zap.Error(err))
+		return false
+	}
+
+	// Set read deadline for response
+	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+
+	// Try to read response
+	var response map[string]interface{}
+	if err := conn.ReadJSON(&response); err != nil {
+		c.logger.Debug("WebSocket read failed", zap.Error(err))
+		return false
+	}
+
+	c.logger.Debug("WebSocket health check successful", zap.String("url", u.String()))
+	return true
+}
+
 // EVMHandler handles health checks for EVM-based blockchain nodes
 type EVMHandler struct {
 	client *http.Client
@@ -252,6 +331,18 @@ func (e *EVMHandler) CheckHealth(ctx context.Context, node NodeConfig) (*NodeHea
 	// EVM nodes don't have a "catching up" concept like Cosmos
 	// If we can get a block height, we consider the node healthy
 
+	// Additionally check WebSocket if configured
+	if node.WebSocketURL != "" {
+		wsHealthy := e.checkWebSocketHealth(ctx, node.WebSocketURL)
+		if !wsHealthy {
+			e.logger.Debug("WebSocket health check failed",
+				zap.String("node", node.Name),
+				zap.String("websocket_url", node.WebSocketURL))
+			// WebSocket failure doesn't make the node unhealthy if HTTP works
+			// but we log it for monitoring
+		}
+	}
+
 	return health, nil
 }
 
@@ -309,4 +400,67 @@ func (e *EVMHandler) GetBlockHeight(ctx context.Context, url string) (uint64, er
 	}
 
 	return height, nil
+}
+
+// checkWebSocketHealth tests WebSocket connectivity for EVM nodes
+func (e *EVMHandler) checkWebSocketHealth(ctx context.Context, wsURL string) bool {
+	// Parse and validate WebSocket URL
+	u, err := url.Parse(wsURL)
+	if err != nil {
+		e.logger.Debug("Invalid WebSocket URL", zap.String("url", wsURL), zap.Error(err))
+		return false
+	}
+
+	// Convert http/https to ws/wss
+	switch u.Scheme {
+	case "http":
+		u.Scheme = "ws"
+	case "https":
+		u.Scheme = "wss"
+	case "ws", "wss":
+		// Already correct
+	default:
+		e.logger.Debug("Unsupported WebSocket scheme", zap.String("scheme", u.Scheme))
+		return false
+	}
+
+	// Create dialer with timeout
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 5 * time.Second,
+	}
+
+	// Attempt WebSocket connection
+	conn, _, err := dialer.DialContext(ctx, u.String(), nil)
+	if err != nil {
+		e.logger.Debug("WebSocket connection failed", zap.String("url", u.String()), zap.Error(err))
+		return false
+	}
+	defer conn.Close()
+
+	// Test with a simple EVM WebSocket subscription (newHeads)
+	testMsg := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  "eth_subscribe",
+		"params":  []interface{}{"newHeads"},
+		"id":      1,
+	}
+
+	// Send test message
+	if err := conn.WriteJSON(testMsg); err != nil {
+		e.logger.Debug("WebSocket write failed", zap.Error(err))
+		return false
+	}
+
+	// Set read deadline for response
+	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+
+	// Try to read response
+	var response map[string]interface{}
+	if err := conn.ReadJSON(&response); err != nil {
+		e.logger.Debug("WebSocket read failed", zap.Error(err))
+		return false
+	}
+
+	e.logger.Debug("WebSocket health check successful", zap.String("url", u.String()))
+	return true
 }

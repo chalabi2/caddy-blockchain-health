@@ -8,6 +8,8 @@ cosmos-rpc.example.com {
             # Primary Cosmos nodes
             node cosmos-validator-1 {
                 url "http://cosmos-val-1.internal:26657"
+                api_url "http://cosmos-val-1.internal:1317"
+                websocket_url "ws://cosmos-val-1.internal:26657/websocket"
                 type "cosmos"
                 weight 100
                 metadata {
@@ -18,6 +20,8 @@ cosmos-rpc.example.com {
 
             node cosmos-validator-2 {
                 url "http://cosmos-val-2.internal:26657"
+                api_url "http://cosmos-val-2.internal:1317"
+                websocket_url "ws://cosmos-val-2.internal:26657/websocket"
                 type "cosmos"
                 weight 100
                 metadata {
@@ -136,6 +140,7 @@ ethereum-mainnet.example.com {
             # Multiple Ethereum nodes
             node eth-geth-1 {
                 url "http://geth-1.internal:8545"
+                websocket_url "ws://geth-1.internal:8546"
                 type "evm"
                 weight 100
                 metadata {
@@ -146,6 +151,7 @@ ethereum-mainnet.example.com {
 
             node eth-erigon-1 {
                 url "http://erigon-1.internal:8545"
+                websocket_url "ws://erigon-1.internal:8546"
                 type "evm"
                 weight 100
                 metadata {
@@ -179,17 +185,14 @@ ethereum-mainnet.example.com {
             metrics_enabled true
             log_level "info"
         }
-
-        # WebSocket upgrade support
-        @websockets {
-            header Connection *Upgrade*
-            header Upgrade websocket
-        }
-        reverse_proxy @websockets {
-            # WebSocket configuration for Ethereum nodes
-            to http://geth-1.internal:8546 http://erigon-1.internal:8546
-        }
     }
+    
+    # WebSocket upgrade support
+    @websockets {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @websockets http://geth-1.internal:8546 http://erigon-1.internal:8546
 }
 
 # Multi-Chain Load Balancer (Mixed Protocols)
@@ -282,8 +285,8 @@ monitoring.example.com {
     handle /health/* {
         # Route to different service health endpoints
         reverse_proxy {
-            to http://cosmos-rpc.example.com/health
-            to http://ethereum-mainnet.example.com/health
+            to http://cosmos-rpc.example.com
+            to http://ethereum-mainnet.example.com
         }
     }
 

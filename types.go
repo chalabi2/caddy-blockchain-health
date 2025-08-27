@@ -19,12 +19,13 @@ const (
 
 // NodeConfig represents the configuration for a blockchain node
 type NodeConfig struct {
-	Name     string            `json:"name"`
-	URL      string            `json:"url"`
-	APIURL   string            `json:"api_url,omitempty"`
-	Type     NodeType          `json:"type"`
-	Weight   int               `json:"weight"`
-	Metadata map[string]string `json:"metadata,omitempty"`
+	Name         string            `json:"name"`
+	URL          string            `json:"url"`
+	APIURL       string            `json:"api_url,omitempty"`
+	WebSocketURL string            `json:"websocket_url,omitempty"`
+	Type         NodeType          `json:"type"`
+	Weight       int               `json:"weight"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
 }
 
 // ExternalReference represents an external blockchain endpoint for validation

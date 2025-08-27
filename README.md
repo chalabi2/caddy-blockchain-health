@@ -109,7 +109,6 @@ blockchain-api.example.com {
             external_reference cosmos {
                 name "cosmos_mainnet"
                 url "https://cosmos-rpc.publicnode.com"
-                type "cosmos"
                 enabled true
             }
 
@@ -181,14 +180,12 @@ blockchain-api.example.com {
             external_reference cosmos {
                 name "cosmos_public"
                 url "https://cosmos-rpc.publicnode.com"
-                type "cosmos"
                 enabled true
             }
 
             external_reference evm {
                 name "ethereum_infura"
                 url "https://mainnet.infura.io/v3/YOUR_PROJECT_ID"
-                type "evm"
                 enabled true
             }
 
@@ -297,14 +294,375 @@ dev-blockchain.localhost {
 
 #### Node Settings
 
-| Option     | Description                                             | Default | Required |
-| ---------- | ------------------------------------------------------- | ------- | -------- |
-| `name`     | Unique identifier for the node                          | -       | ✅       |
-| `url`      | Primary endpoint URL (RPC for Cosmos, JSON-RPC for EVM) | -       | ✅       |
-| `api_url`  | Optional REST API URL for Cosmos nodes                  | -       | ❌       |
-| `type`     | Node type (`cosmos` or `evm`)                           | -       | ✅       |
-| `weight`   | Load balancing weight                                   | `100`   | ❌       |
-| `metadata` | Optional key-value metadata                             | `{}`    | ❌       |
+| Option          | Description                                             | Default | Required |
+| --------------- | ------------------------------------------------------- | ------- | -------- |
+| `name`          | Unique identifier for the node                          | -       | ✅       |
+| `url`           | Primary endpoint URL (RPC for Cosmos, JSON-RPC for EVM) | -       | ✅       |
+| `api_url`       | Optional REST API URL for Cosmos nodes                  | -       | ❌       |
+| `websocket_url` | Optional WebSocket URL for real-time connections        | -       | ❌       |
+| `type`          | Node type (`cosmos` or `evm`)                           | -       | ✅       |
+| `weight`        | Load balancing weight                                   | `100`   | ❌       |
+| `metadata`      | Optional key-value metadata                             | `{}`    | ❌       |
+
+#### 🔍 **Cosmos RPC vs REST API Differentiation**
+
+The plugin intelligently handles Cosmos SDK chains with separate RPC and REST endpoints:
+
+**Scenario 1: Combined Node (Single Service)**
+
+```caddy
+node cosmos-combined {
+    url "http://cosmos-node:26657"          # RPC endpoint
+    api_url "http://cosmos-node:1317"       # REST API endpoint
+    type "cosmos"
+    weight 100
+}
+```
+
+- ✅ **Health checks RPC first, REST as fallback** - Tries RPC (`/status`), then REST (`/cosmos/base/tendermint/v1beta1/syncing`) if RPC fails
+- ✅ **Fallback redundancy** - Node stays available if either service responds
+- ✅ **Recommended for full-node infrastructure**
+
+**Scenario 2: Separated Services (Microservice Architecture)**
+
+```caddy
+# Cosmos RPC load balancer
+cosmos-rpc.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            node rpc-1 {
+                url "http://cosmos-rpc-1:26657"    # Only RPC
+                type "cosmos"
+            }
+            node rpc-2 {
+                url "http://cosmos-rpc-2:26657"    # Only RPC
+                type "cosmos"
+            }
+        }
+    }
+}
+
+# Cosmos REST API load balancer
+cosmos-api.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            node api-1 {
+                url "http://cosmos-api-1:1317"     # Only REST
+                type "cosmos"
+            }
+            node api-2 {
+                url "http://cosmos-api-2:1317"     # Only REST
+                type "cosmos"
+            }
+        }
+    }
+}
+```
+
+- ✅ **Health checks appropriate endpoint** - RPC or REST based on URL pattern
+- ✅ **No redundant checks** - Each service validates its specific protocol
+- ✅ **Recommended for microservice deployments**
+
+**Auto-Detection Logic:**
+
+- **Port 26657** or `/status` path → RPC health check
+- **Port 1317** or `/cosmos/` path → REST API health check
+- **Both `url` and `api_url` specified** → Checks both endpoints
+
+#### 🌐 **WebSocket Support**
+
+The plugin provides comprehensive WebSocket support for real-time blockchain connections:
+
+**Cosmos WebSocket Configuration:**
+
+```caddy
+node cosmos-websocket {
+    url "http://cosmos-node:26657"
+    api_url "http://cosmos-node:1317"
+    websocket_url "ws://cosmos-node:26657/websocket"
+    type "cosmos"
+    weight 100
+}
+```
+
+- ✅ **Tendermint WebSocket subscriptions** - Tests `tm.event = 'NewBlock'` subscriptions
+- ✅ **Real-time event streaming** - Validates connectivity for live event monitoring
+- ✅ **Auto scheme conversion** - Converts `http`/`https` to `ws`/`wss` automatically
+
+**EVM WebSocket Configuration:**
+
+```caddy
+node ethereum-websocket {
+    url "http://geth-node:8545"
+    websocket_url "ws://geth-node:8546"
+    type "evm"
+    weight 100
+}
+```
+
+- ✅ **JSON-RPC WebSocket** - Tests `eth_subscribe` for `newHeads` subscriptions
+- ✅ **Real-time block monitoring** - Validates connectivity for live block feeds
+- ✅ **Standard ports** - Uses typical WebSocket ports (8546 for Ethereum)
+
+**WebSocket Health Checking:**
+
+- **Non-blocking** - WebSocket failures don't mark nodes as unhealthy if HTTP works
+- **Informational monitoring** - Provides observability into WebSocket connectivity
+- **Timeout protection** - 3-second read timeout prevents hanging connections
+- **Protocol-specific tests** - Uses appropriate subscription methods per blockchain type
+
+#### 🔗 **EVM JSON-RPC Node Differentiation**
+
+EVM nodes use JSON-RPC protocol and don't have separate RPC/REST endpoints like Cosmos:
+
+**Standard EVM Configuration:**
+
+```caddy
+node ethereum-primary {
+    url "http://ethereum-node:8545"    # JSON-RPC endpoint
+    type "evm"
+    weight 100
+    metadata {
+        client "geth"
+        sync_mode "full"
+    }
+}
+```
+
+- ✅ **Single endpoint** - All requests use JSON-RPC over HTTP
+- ✅ **Health check via `eth_blockNumber`** - Validates node responsiveness and current block
+- ✅ **No separate API URL needed** - EVM protocol is unified
+
+**EVM Service Types (by function, not protocol):**
+
+```caddy
+# Archive node for historical data
+node ethereum-archive {
+    url "http://archive-node:8545"
+    type "evm"
+    weight 50
+    metadata {
+        type "archive"
+        retention "full_history"
+    }
+}
+
+# Full node for current state
+node ethereum-full {
+    url "http://full-node:8545"
+    type "evm"
+    weight 100
+    metadata {
+        type "full"
+        retention "recent_blocks"
+    }
+}
+
+# Light client for basic queries
+node ethereum-light {
+    url "http://light-node:8545"
+    type "evm"
+    weight 75
+    metadata {
+        type "light"
+        retention "minimal"
+    }
+}
+```
+
+**Key Differences from Cosmos:**
+
+| Aspect              | Cosmos SDK                                            | EVM Chains                     |
+| ------------------- | ----------------------------------------------------- | ------------------------------ |
+| **Protocol**        | RPC (26657) + REST (1317)                             | JSON-RPC (8545)                |
+| **Health Check**    | `/status` + `/cosmos/base/tendermint/v1beta1/syncing` | `eth_blockNumber`              |
+| **Endpoints**       | Separate RPC/REST URLs possible                       | Single JSON-RPC endpoint       |
+| **Sync Status**     | `catching_up` boolean                                 | Block height comparison        |
+| **Differentiation** | Service type (RPC vs REST)                            | Node type (archive/full/light) |
+
+#### 📊 **Block Height Validation Strategy**
+
+The plugin performs **internal pool validation** and **external reference monitoring**:
+
+##### **1. Internal Pool Comparison** ✅ **Affects Load Balancing**
+
+Compares nodes within the same pool and **removes lagging nodes** from the load balancer:
+
+```caddy
+dynamic blockchain_health {
+    # These nodes will be compared against each other
+    node eth-node-1 {
+        url "http://eth-1.internal:8545"
+        type "evm"
+        weight 100
+    }
+
+    node eth-node-2 {
+        url "http://eth-2.internal:8545"
+        type "evm"
+        weight 100
+    }
+
+    node eth-node-3 {
+        url "http://eth-3.internal:8545"
+        type "evm"
+        weight 100
+    }
+
+    # If any node is more than 5 blocks behind the highest in the pool
+    block_height_threshold 5
+}
+```
+
+**Logic**: If `eth-node-1` is at block 18,500,000 and `eth-node-2` is at 18,499,994, then `eth-node-2` is **removed from load balancer** (6 blocks behind > threshold of 5).
+
+##### **2. External Reference Monitoring** ℹ️ **Informational Only**
+
+Monitors your nodes against trusted external sources **for observability** (does not affect load balancing):
+
+**EVM External References:**
+
+```caddy
+dynamic blockchain_health {
+    node your-eth-node {
+        url "http://your-node:8545"
+        type "evm"
+        weight 100
+    }
+
+    # Compare against external trusted sources
+    external_reference evm {
+        name "infura_mainnet"
+        url "https://mainnet.infura.io/v3/YOUR_PROJECT_ID"
+        enabled true
+    }
+
+    external_reference evm {
+        name "alchemy_backup"
+        url "https://eth-mainnet.alchemyapi.io/v2/YOUR_API_KEY"
+        enabled true
+    }
+
+    external_reference evm {
+        name "public_ethereum"
+        url "https://ethereum-rpc.publicnode.com"
+        enabled true
+    }
+
+    # If your nodes are more than 10 blocks behind external references
+    external_reference_threshold 10
+}
+```
+
+**Multi-Chain EVM Examples:**
+
+```caddy
+# Polygon network
+dynamic blockchain_health {
+    node polygon-node {
+        url "http://polygon-node:8545"
+        type "evm"
+    }
+
+    external_reference evm {
+        name "polygon_alchemy"
+        url "https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
+        enabled true
+    }
+
+    external_reference evm {
+        name "polygon_public"
+        url "https://polygon-rpc.com"
+        enabled true
+    }
+}
+
+# Binance Smart Chain
+dynamic blockchain_health {
+    node bsc-node {
+        url "http://bsc-node:8545"
+        type "evm"
+    }
+
+    external_reference evm {
+        name "bsc_public"
+        url "https://bsc-dataseed.binance.org"
+        enabled true
+    }
+
+    external_reference evm {
+        name "bsc_backup"
+        url "https://bsc-dataseed1.defibit.io"
+        enabled true
+    }
+}
+
+# Arbitrum network
+dynamic blockchain_health {
+    node arbitrum-node {
+        url "http://arbitrum-node:8545"
+        type "evm"
+    }
+
+    external_reference evm {
+        name "arbitrum_alchemy"
+        url "https://arb-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
+        enabled true
+    }
+}
+```
+
+**Cosmos External References:**
+
+```caddy
+dynamic blockchain_health {
+    node cosmos-node {
+        url "http://cosmos-node:26657"
+        type "cosmos"
+    }
+
+    external_reference cosmos {
+        name "cosmos_public"
+        url "https://cosmos-rpc.publicnode.com"
+        enabled true
+    }
+
+    external_reference cosmos {
+        name "cosmos_polkachu"
+        url "https://cosmos-rpc.polkachu.com"
+        enabled true
+    }
+}
+```
+
+##### **Validation Flow:**
+
+1. **Internal Check**: Compare all pool nodes → Find highest block height in pool
+2. **Remove Internal Laggards**: Nodes > `block_height_threshold` behind pool leader = **removed from load balancer**
+3. **External Monitoring**: Query external references → Get external block heights
+4. **Flag External Laggards**: Nodes > `external_reference_threshold` behind external references = **flagged in monitoring only**
+5. **Final Load Balancing**: Only nodes passing internal validation receive traffic
+
+##### **Example Scenario:**
+
+```
+Pool State:
+- eth-node-1: Block 18,500,000 (highest in pool)
+- eth-node-2: Block 18,499,996 (4 behind, healthy)
+- eth-node-3: Block 18,499,990 (10 behind, unhealthy - exceeds threshold 5)
+
+External References:
+- infura_mainnet: Block 18,500,002
+- alchemy_backup: Block 18,500,001
+- Highest external: 18,500,002
+
+External Monitoring (informational):
+- eth-node-1: 2 blocks behind external (flagged as up-to-date)
+- eth-node-2: 6 blocks behind external (flagged as up-to-date)
+- eth-node-3: 12 blocks behind external (flagged as lagging in monitoring)
+
+Final Result: Only eth-node-1 and eth-node-2 receive traffic (based on internal validation only)
+```
 
 #### Health Check Settings
 
@@ -324,12 +682,24 @@ dev-blockchain.localhost {
 
 #### External References
 
-| Option    | Description                        | Default | Required |
-| --------- | ---------------------------------- | ------- | -------- |
-| `name`    | Reference identifier               | -       | ✅       |
-| `url`     | External endpoint URL              | -       | ✅       |
-| `type`    | Reference type (`cosmos` or `evm`) | -       | ✅       |
-| `enabled` | Enable this reference              | `true`  | ❌       |
+**Syntax**: `external_reference <type> { ... }`
+
+| Option    | Description                                              | Default | Required |
+| --------- | -------------------------------------------------------- | ------- | -------- |
+| `<type>`  | Reference type (`cosmos` or `evm`) specified as argument | -       | ✅       |
+| `name`    | Reference identifier                                     | -       | ✅       |
+| `url`     | External endpoint URL                                    | -       | ✅       |
+| `enabled` | Enable this reference                                    | `true`  | ❌       |
+
+**Example**:
+
+```caddy
+external_reference cosmos {
+    name "cosmos_public"
+    url "https://cosmos-rpc.publicnode.com"
+    enabled true
+}
+```
 
 #### Performance Settings
 

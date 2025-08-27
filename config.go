@@ -173,6 +173,12 @@ func (b *BlockchainHealthUpstream) parseNode(d *caddyfile.Dispenser) (NodeConfig
 			}
 			node.APIURL = d.Val()
 
+		case "websocket_url":
+			if !d.NextArg() {
+				return node, d.ArgErr()
+			}
+			node.WebSocketURL = d.Val()
+
 		case "type":
 			if !d.NextArg() {
 				return node, d.ArgErr()
@@ -201,21 +207,8 @@ func (b *BlockchainHealthUpstream) parseNode(d *caddyfile.Dispenser) (NodeConfig
 				node.Metadata = make(map[string]string)
 			}
 
-			// Parse metadata block or key-value pair
-			if d.NextBlock(2) {
-				for d.NextBlock(2) {
-					key := d.Val()
-					if !d.NextArg() {
-						return node, d.ArgErr()
-					}
-					value := d.Val()
-					node.Metadata[key] = value
-				}
-			} else {
-				// Single key-value pair
-				if !d.NextArg() {
-					return node, d.ArgErr()
-				}
+			// Parse metadata block
+			for d.NextBlock(2) {
 				key := d.Val()
 				if !d.NextArg() {
 					return node, d.ArgErr()

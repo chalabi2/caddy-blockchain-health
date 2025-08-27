@@ -21,6 +21,8 @@
                         {
                           "name": "cosmos-validator-1",
                           "url": "http://cosmos-val-1.internal:26657",
+                          "api_url": "http://cosmos-val-1.internal:1317",
+                          "websocket_url": "ws://cosmos-val-1.internal:26657/websocket",
                           "type": "cosmos",
                           "weight": 100,
                           "metadata": {
@@ -84,7 +86,6 @@
                     }
                   },
                   "load_balancing": {
-                    "policy": "least_conn",
                     "retries": 2,
                     "try_duration": "5s"
                   }
@@ -158,7 +159,7 @@
                     }
                   },
                   "load_balancing": {
-                    "policy": "round_robin"
+                    "retries": 1
                   }
                 }
               ]
