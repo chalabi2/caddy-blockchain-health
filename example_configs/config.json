@@ -1,751 +1,450 @@
 {
-	"admin": {
-		"listen": "localhost:2019"
-	},
-	"apps": {
-		"http": {
-			"servers": {
-				"srv0": {
-					"listen": [
-						":443"
-					],
-					"routes": [
-						{
-							"match": [
-								{
-									"host": [
-										"validated-blockchain.example.com"
-									]
-								}
-							],
-							"handle": [
-								{
-									"handler": "subroute",
-									"routes": [
-										{
-											"handle": [
-												{
-													"dynamic_upstreams": {
-														"block_validation": {
-															"external_reference_threshold": 0,
-															"height_threshold": 0
-														},
-														"chain": {
-															"chain_type": "cosmos"
-														},
-														"environment": {
-															"servers": "http://validated-1:26657"
-														},
-														"failure_handling": {
-															"circuit_breaker_threshold": 0,
-															"grace_period": "",
-															"min_healthy_nodes": 0
-														},
-														"health_check": {
-															"interval": "",
-															"retry_attempts": 0,
-															"retry_delay": "",
-															"timeout": ""
-														},
-														"legacy": {
-															"fallback_behavior": "fail_startup",
-															"optional_env_vars": "BACKUP_SERVERS EXTERNAL_REF_URL",
-															"required_env_vars": "VALIDATED_SERVERS"
-														},
-														"monitoring": {
-															"health_endpoint": "",
-															"log_level": "",
-															"metrics_enabled": false
-														},
-														"performance": {
-															"cache_duration": "",
-															"max_concurrent_checks": 0
-														},
-														"source": "blockchain_health"
-													},
-													"handler": "reverse_proxy"
-												}
-											]
-										}
-									]
-								}
-							],
-							"terminal": true
-						},
-						{
-							"match": [
-								{
-									"host": [
-										"blockchain-generic.example.com"
-									]
-								}
-							],
-							"handle": [
-								{
-									"handler": "subroute",
-									"routes": [
-										{
-											"handle": [
-												{
-													"dynamic_upstreams": {
-														"block_validation": {
-															"external_reference_threshold": 0,
-															"height_threshold": 0
-														},
-														"chain": {},
-														"environment": {
-															"servers": "http://node-1:26657 http://node-2:1317 http://node-3:8545"
-														},
-														"failure_handling": {
-															"circuit_breaker_threshold": 0,
-															"grace_period": "",
-															"min_healthy_nodes": 0
-														},
-														"health_check": {
-															"interval": "10s",
-															"retry_attempts": 0,
-															"retry_delay": "",
-															"timeout": ""
-														},
-														"legacy": {},
-														"monitoring": {
-															"health_endpoint": "",
-															"log_level": "",
-															"metrics_enabled": true
-														},
-														"performance": {
-															"cache_duration": "",
-															"max_concurrent_checks": 0
-														},
-														"source": "blockchain_health"
-													},
-													"handler": "reverse_proxy"
-												}
-											]
-										}
-									]
-								}
-							],
-							"terminal": true
-						},
-						{
-							"match": [
-								{
-									"host": [
-										"legacy-blockchain.example.com"
-									]
-								}
-							],
-							"handle": [
-								{
-									"handler": "subroute",
-									"routes": [
-										{
-											"handle": [
-												{
-													"dynamic_upstreams": {
-														"block_validation": {
-															"external_reference_threshold": 0,
-															"height_threshold": 0
-														},
-														"chain": {},
-														"environment": {
-															"servers": "http://legacy-1:26657"
-														},
-														"failure_handling": {
-															"circuit_breaker_threshold": 0,
-															"grace_period": "",
-															"min_healthy_nodes": 0
-														},
-														"health_check": {
-															"interval": "30s",
-															"retry_attempts": 0,
-															"retry_delay": "",
-															"timeout": ""
-														},
-														"legacy": {
-															"fallback_behavior": "disable_health_checks",
-															"legacy_mode": true,
-															"required_env_vars": "LEGACY_SERVERS"
-														},
-														"monitoring": {
-															"health_endpoint": "",
-															"log_level": "",
-															"metrics_enabled": false
-														},
-														"performance": {
-															"cache_duration": "",
-															"max_concurrent_checks": 0
-														},
-														"source": "blockchain_health"
-													},
-													"handler": "reverse_proxy"
-												}
-											]
-										}
-									]
-								}
-							],
-							"terminal": true
-						},
-						{
-							"match": [
-								{
-									"host": [
-										"cosmos-rpc-only.example.com"
-									]
-								}
-							],
-							"handle": [
-								{
-									"handler": "subroute",
-									"routes": [
-										{
-											"handle": [
-												{
-													"dynamic_upstreams": {
-														"block_validation": {
-															"external_reference_threshold": 0,
-															"height_threshold": 0
-														},
-														"chain": {
-															"chain_type": "cosmos",
-															"service_type": "rpc"
-														},
-														"environment": {
-															"rpc_servers": "http://cosmos-rpc-1:26657 http://cosmos-rpc-2:26657"
-														},
-														"failure_handling": {
-															"circuit_breaker_threshold": 0,
-															"grace_period": "",
-															"min_healthy_nodes": 1
-														},
-														"health_check": {
-															"interval": "10s",
-															"retry_attempts": 0,
-															"retry_delay": "",
-															"timeout": ""
-														},
-														"legacy": {},
-														"monitoring": {
-															"health_endpoint": "",
-															"log_level": "",
-															"metrics_enabled": false
-														},
-														"performance": {
-															"cache_duration": "",
-															"max_concurrent_checks": 0
-														},
-														"source": "blockchain_health"
-													},
-													"handler": "reverse_proxy"
-												}
-											]
-										}
-									]
-								}
-							],
-							"terminal": true
-						},
-						{
-							"match": [
-								{
-									"host": [
-										"cosmos-api-only.example.com"
-									]
-								}
-							],
-							"handle": [
-								{
-									"handler": "subroute",
-									"routes": [
-										{
-											"handle": [
-												{
-													"dynamic_upstreams": {
-														"block_validation": {
-															"external_reference_threshold": 0,
-															"height_threshold": 0
-														},
-														"chain": {
-															"chain_type": "cosmos",
-															"service_type": "api"
-														},
-														"environment": {
-															"api_servers": "http://cosmos-api-1:1317 http://cosmos-api-2:1317"
-														},
-														"failure_handling": {
-															"circuit_breaker_threshold": 0,
-															"grace_period": "",
-															"min_healthy_nodes": 1
-														},
-														"health_check": {
-															"interval": "10s",
-															"retry_attempts": 0,
-															"retry_delay": "",
-															"timeout": ""
-														},
-														"legacy": {},
-														"monitoring": {
-															"health_endpoint": "",
-															"log_level": "",
-															"metrics_enabled": false
-														},
-														"performance": {
-															"cache_duration": "",
-															"max_concurrent_checks": 0
-														},
-														"source": "blockchain_health"
-													},
-													"handler": "reverse_proxy"
-												}
-											]
-										}
-									]
-								}
-							],
-							"terminal": true
-						},
-						{
-							"match": [
-								{
-									"host": [
-										"dev-blockchain.localhost"
-									]
-								}
-							],
-							"handle": [
-								{
-									"handler": "subroute",
-									"routes": [
-										{
-											"handle": [
-												{
-													"dynamic_upstreams": {
-														"block_validation": {
-															"external_reference_threshold": 0,
-															"height_threshold": 20
-														},
-														"chain": {
-															"chain_type": "cosmos"
-														},
-														"environment": {
-															"servers": "http://localhost:26657 http://localhost:1317"
-														},
-														"failure_handling": {
-															"circuit_breaker_threshold": 0,
-															"grace_period": "",
-															"min_healthy_nodes": 0
-														},
-														"health_check": {
-															"interval": "5s",
-															"retry_attempts": 0,
-															"retry_delay": "",
-															"timeout": "10s"
-														},
-														"legacy": {
-															"fallback_behavior": "disable_health_checks"
-														},
-														"monitoring": {
-															"health_endpoint": "",
-															"log_level": "debug",
-															"metrics_enabled": false
-														},
-														"performance": {
-															"cache_duration": "",
-															"max_concurrent_checks": 0
-														},
-														"source": "blockchain_health"
-													},
-													"handler": "reverse_proxy"
-												}
-											]
-										}
-									]
-								}
-							],
-							"terminal": true
-						},
-						{
-							"match": [
-								{
-									"host": [
-										"cosmos-hub.example.com"
-									]
-								}
-							],
-							"handle": [
-								{
-									"handler": "subroute",
-									"routes": [
-										{
-											"handle": [
-												{
-													"dynamic_upstreams": {
-														"block_validation": {
-															"external_reference_threshold": 0,
-															"height_threshold": 0
-														},
-														"chain": {
-															"chain_preset": "cosmos-hub"
-														},
-														"environment": {
-															"servers": "http://cosmos-1:26657 http://cosmos-2:26657"
-														},
-														"failure_handling": {
-															"circuit_breaker_threshold": 0,
-															"grace_period": "",
-															"min_healthy_nodes": 2
-														},
-														"health_check": {
-															"interval": "",
-															"retry_attempts": 0,
-															"retry_delay": "",
-															"timeout": ""
-														},
-														"legacy": {},
-														"monitoring": {
-															"health_endpoint": "",
-															"log_level": "",
-															"metrics_enabled": true
-														},
-														"performance": {
-															"cache_duration": "",
-															"max_concurrent_checks": 0
-														},
-														"source": "blockchain_health"
-													},
-													"handler": "reverse_proxy"
-												}
-											]
-										}
-									]
-								}
-							],
-							"terminal": true
-						},
-						{
-							"match": [
-								{
-									"host": [
-										"cosmos-rpc.example.com"
-									]
-								}
-							],
-							"handle": [
-								{
-									"handler": "subroute",
-									"routes": [
-										{
-											"handle": [
-												{
-													"dynamic_upstreams": {
-														"block_validation": {
-															"external_reference_threshold": 0,
-															"height_threshold": 5
-														},
-														"chain": {
-															"auto_discover_from_env": "COSMOS"
-														},
-														"environment": {},
-														"failure_handling": {
-															"circuit_breaker_threshold": 0,
-															"grace_period": "",
-															"min_healthy_nodes": 0
-														},
-														"health_check": {
-															"interval": "15s",
-															"retry_attempts": 0,
-															"retry_delay": "",
-															"timeout": ""
-														},
-														"legacy": {},
-														"monitoring": {
-															"health_endpoint": "",
-															"log_level": "",
-															"metrics_enabled": true
-														},
-														"performance": {
-															"cache_duration": "",
-															"max_concurrent_checks": 0
-														},
-														"source": "blockchain_health"
-													},
-													"handler": "reverse_proxy"
-												}
-											]
-										}
-									]
-								}
-							],
-							"terminal": true
-						},
-						{
-							"match": [
-								{
-									"host": [
-										"cosmos-ws.example.com"
-									]
-								}
-							],
-							"handle": [
-								{
-									"handler": "subroute",
-									"routes": [
-										{
-											"handle": [
-												{
-													"dynamic_upstreams": {
-														"block_validation": {
-															"external_reference_threshold": 0,
-															"height_threshold": 0
-														},
-														"chain": {
-															"chain_type": "cosmos",
-															"service_type": "websocket"
-														},
-														"environment": {
-															"websocket_servers": "ws://cosmos-ws-1:26657/websocket"
-														},
-														"failure_handling": {
-															"circuit_breaker_threshold": 0,
-															"grace_period": "",
-															"min_healthy_nodes": 0
-														},
-														"health_check": {
-															"interval": "20s",
-															"retry_attempts": 0,
-															"retry_delay": "",
-															"timeout": "8s"
-														},
-														"legacy": {},
-														"monitoring": {
-															"health_endpoint": "",
-															"log_level": "",
-															"metrics_enabled": false
-														},
-														"performance": {
-															"cache_duration": "",
-															"max_concurrent_checks": 0
-														},
-														"source": "blockchain_health"
-													},
-													"handler": "reverse_proxy"
-												}
-											]
-										}
-									]
-								}
-							],
-							"terminal": true
-						},
-						{
-							"match": [
-								{
-									"host": [
-										"ethereum.example.com"
-									]
-								}
-							],
-							"handle": [
-								{
-									"handler": "subroute",
-									"routes": [
-										{
-											"handle": [
-												{
-													"dynamic_upstreams": {
-														"block_validation": {
-															"external_reference_threshold": 0,
-															"height_threshold": 0
-														},
-														"chain": {
-															"chain_preset": "ethereum"
-														},
-														"environment": {
-															"evm_servers": "http://eth-1:8545 http://eth-2:8545"
-														},
-														"failure_handling": {
-															"circuit_breaker_threshold": 0.8,
-															"grace_period": "",
-															"min_healthy_nodes": 1
-														},
-														"health_check": {
-															"interval": "",
-															"retry_attempts": 0,
-															"retry_delay": "",
-															"timeout": ""
-														},
-														"legacy": {},
-														"monitoring": {
-															"health_endpoint": "",
-															"log_level": "",
-															"metrics_enabled": true
-														},
-														"performance": {
-															"cache_duration": "",
-															"max_concurrent_checks": 0
-														},
-														"source": "blockchain_health"
-													},
-													"handler": "reverse_proxy"
-												}
-											]
-										}
-									]
-								}
-							],
-							"terminal": true
-						},
-						{
-							"match": [
-								{
-									"host": [
-										"prod-api.example.com"
-									]
-								}
-							],
-							"handle": [
-								{
-									"handler": "subroute",
-									"routes": [
-										{
-											"handle": [
-												{
-													"handler": "subroute",
-													"routes": [
-														{
-															"handle": [
-																{
-																	"body": "OK",
-																	"handler": "static_response",
-																	"status_code": 200
-																}
-															]
-														}
-													]
-												}
-											],
-											"match": [
-												{
-													"path": [
-														"/blockchain-health"
-													]
-												}
-											]
-										},
-										{
-											"handle": [
-												{
-													"dynamic_upstreams": {
-														"block_validation": {
-															"external_reference_threshold": 0,
-															"height_threshold": 2
-														},
-														"chain": {
-															"chain_preset": "cosmos-hub"
-														},
-														"environment": {
-															"api_servers": "http://prod-api-1:1317 http://prod-api-2:1317",
-															"rpc_servers": "http://prod-rpc-1:26657 http://prod-rpc-2:26657",
-															"websocket_servers": "ws://prod-ws-1:26657/websocket"
-														},
-														"failure_handling": {
-															"circuit_breaker_threshold": 0.7,
-															"grace_period": "30s",
-															"min_healthy_nodes": 3
-														},
-														"health_check": {
-															"interval": "5s",
-															"retry_attempts": 3,
-															"retry_delay": "",
-															"timeout": "2s"
-														},
-														"legacy": {},
-														"monitoring": {
-															"health_endpoint": "/blockchain-health",
-															"log_level": "info",
-															"metrics_enabled": true
-														},
-														"performance": {
-															"cache_duration": "15s",
-															"max_concurrent_checks": 20
-														},
-														"source": "blockchain_health"
-													},
-													"handler": "reverse_proxy"
-												}
-											]
-										}
-									]
-								}
-							],
-							"terminal": true
-						},
-						{
-							"match": [
-								{
-									"host": [
-										"althea.example.com"
-									]
-								}
-							],
-							"handle": [
-								{
-									"handler": "subroute",
-									"routes": [
-										{
-											"handle": [
-												{
-													"dynamic_upstreams": {
-														"block_validation": {
-															"external_reference_threshold": 0,
-															"height_threshold": 5
-														},
-														"chain": {
-															"chain_preset": "althea"
-														},
-														"environment": {
-															"api_servers": "http://althea-api-1:1317",
-															"evm_servers": "http://althea-evm-1:8545",
-															"evm_ws_servers": "ws://althea-evm-1:8546",
-															"rpc_servers": "http://althea-rpc-1:26657"
-														},
-														"failure_handling": {
-															"circuit_breaker_threshold": 0,
-															"grace_period": "",
-															"min_healthy_nodes": 2
-														},
-														"health_check": {
-															"interval": "15s",
-															"retry_attempts": 0,
-															"retry_delay": "",
-															"timeout": ""
-														},
-														"legacy": {},
-														"monitoring": {
-															"health_endpoint": "",
-															"log_level": "",
-															"metrics_enabled": false
-														},
-														"performance": {
-															"cache_duration": "",
-															"max_concurrent_checks": 0
-														},
-														"source": "blockchain_health"
-													},
-													"handler": "reverse_proxy"
-												}
-											]
-										}
-									]
-								}
-							],
-							"terminal": true
-						}
-					]
-				}
-			}
-		}
-	}
+  "admin": {
+    "listen": "localhost:2019"
+  },
+  "apps": {
+    "http": {
+      "servers": {
+        "srv0": {
+          "listen": [":443"],
+          "routes": [
+            {
+              "match": [
+                {
+                  "host": ["cosmos.example.com"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "subroute",
+                  "routes": [
+                    {
+                      "match": [
+                        {
+                          "path": ["/rpc/*"]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "dynamic_upstreams": {
+                            "source": "blockchain_health",
+                            "environment": {
+                              "rpc_servers": "http://cosmos-1:26657 http://cosmos-2:26657 http://cosmos-3:26657"
+                            },
+                            "chain": {
+                              "chain_type": "cosmos"
+                            },
+                            "health_check": {
+                              "interval": "10s",
+                              "timeout": "10s"
+                            },
+                            "block_validation": {
+                              "height_threshold": 3,
+                              "external_reference_threshold": 0
+                            },
+                            "failure_handling": {
+                              "min_healthy_nodes": 2
+                            },
+                            "monitoring": {
+                              "metrics_enabled": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "match": [
+                        {
+                          "path": ["/api/*"]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "dynamic_upstreams": {
+                            "source": "blockchain_health",
+                            "environment": {
+                              "api_servers": "http://api-1:1317 http://api-2:1317"
+                            },
+                            "chain": {
+                              "chain_type": "cosmos"
+                            },
+                            "health_check": {
+                              "interval": "10s",
+                              "timeout": "10s"
+                            },
+                            "block_validation": {
+                              "height_threshold": 3,
+                              "external_reference_threshold": 0
+                            },
+                            "failure_handling": {
+                              "min_healthy_nodes": 1
+                            },
+                            "monitoring": {
+                              "metrics_enabled": true
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            },
+            {
+              "match": [
+                {
+                  "host": ["ethereum.example.com"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "subroute",
+                  "routes": [
+                    {
+                      "match": [
+                        {
+                          "path": ["/rpc/*"]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "dynamic_upstreams": {
+                            "source": "blockchain_health",
+                            "environment": {
+                              "evm_servers": "http://eth-1:8545 http://eth-2:8545"
+                            },
+                            "chain": {
+                              "chain_type": "evm"
+                            },
+                            "health_check": {
+                              "interval": "10s",
+                              "timeout": "10s"
+                            },
+                            "block_validation": {
+                              "height_threshold": 3,
+                              "external_reference_threshold": 0
+                            },
+                            "failure_handling": {
+                              "min_healthy_nodes": 1
+                            },
+                            "monitoring": {
+                              "metrics_enabled": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "match": [
+                        {
+                          "path": ["/ws/*"]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "dynamic_upstreams": {
+                            "source": "blockchain_health",
+                            "environment": {
+                              "evm_ws_servers": "ws://eth-1:8546 ws://eth-2:8546"
+                            },
+                            "chain": {
+                              "chain_type": "evm"
+                            },
+                            "health_check": {
+                              "interval": "5s",
+                              "timeout": "3s"
+                            },
+                            "block_validation": {
+                              "height_threshold": 10,
+                              "external_reference_threshold": 0
+                            },
+                            "failure_handling": {
+                              "min_healthy_nodes": 1
+                            },
+                            "monitoring": {
+                              "metrics_enabled": true
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            },
+            {
+              "match": [
+                {
+                  "host": ["althea.example.com"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "subroute",
+                  "routes": [
+                    {
+                      "match": [
+                        {
+                          "path": ["/rpc/cosmos/*"]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "dynamic_upstreams": {
+                            "source": "blockchain_health",
+                            "environment": {
+                              "rpc_servers": "http://althea-rpc-1:26657 http://althea-rpc-2:26657"
+                            },
+                            "chain": {
+                              "chain_type": "cosmos"
+                            },
+                            "health_check": {
+                              "interval": "10s",
+                              "timeout": "10s"
+                            },
+                            "block_validation": {
+                              "height_threshold": 3,
+                              "external_reference_threshold": 0
+                            },
+                            "failure_handling": {
+                              "min_healthy_nodes": 1
+                            },
+                            "monitoring": {
+                              "metrics_enabled": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "match": [
+                        {
+                          "path": ["/rpc/evm/*"]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "dynamic_upstreams": {
+                            "source": "blockchain_health",
+                            "environment": {
+                              "evm_servers": "http://althea-evm-1:8545 http://althea-evm-2:8545"
+                            },
+                            "chain": {
+                              "chain_type": "evm"
+                            },
+                            "health_check": {
+                              "interval": "10s",
+                              "timeout": "10s"
+                            },
+                            "block_validation": {
+                              "height_threshold": 3,
+                              "external_reference_threshold": 0
+                            },
+                            "failure_handling": {
+                              "min_healthy_nodes": 1
+                            },
+                            "monitoring": {
+                              "metrics_enabled": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "match": [
+                        {
+                          "path": ["/api/*"]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "dynamic_upstreams": {
+                            "source": "blockchain_health",
+                            "environment": {
+                              "api_servers": "http://althea-api-1:1317 http://althea-api-2:1317"
+                            },
+                            "chain": {
+                              "chain_type": "cosmos"
+                            },
+                            "health_check": {
+                              "interval": "10s",
+                              "timeout": "10s"
+                            },
+                            "block_validation": {
+                              "height_threshold": 3,
+                              "external_reference_threshold": 0
+                            },
+                            "failure_handling": {
+                              "min_healthy_nodes": 1
+                            },
+                            "monitoring": {
+                              "metrics_enabled": true
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            },
+            {
+              "match": [
+                {
+                  "host": ["dev-blockchain.localhost"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "dynamic_upstreams": {
+                    "source": "blockchain_health",
+                    "environment": {
+                      "rpc_servers": "http://localhost:26657",
+                      "api_servers": "http://localhost:1317"
+                    },
+                    "chain": {
+                      "chain_type": "cosmos"
+                    },
+                    "health_check": {
+                      "interval": "5s",
+                      "timeout": "10s"
+                    },
+                    "block_validation": {
+                      "height_threshold": 20,
+                      "external_reference_threshold": 0
+                    },
+                    "failure_handling": {
+                      "min_healthy_nodes": 0
+                    },
+                    "monitoring": {
+                      "log_level": "debug",
+                      "metrics_enabled": true
+                    }
+                  }
+                }
+              ],
+              "terminal": true
+            },
+            {
+              "match": [
+                {
+                  "host": ["prod-api.example.com"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "subroute",
+                  "routes": [
+                    {
+                      "match": [
+                        {
+                          "path": ["/rpc/*"]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "dynamic_upstreams": {
+                            "source": "blockchain_health",
+                            "environment": {
+                              "rpc_servers": "http://prod-rpc-1:26657 http://prod-rpc-2:26657 http://prod-rpc-3:26657"
+                            },
+                            "chain": {
+                              "chain_type": "cosmos"
+                            },
+                            "health_check": {
+                              "interval": "5s",
+                              "timeout": "2s"
+                            },
+                            "block_validation": {
+                              "height_threshold": 2,
+                              "external_reference_threshold": 0
+                            },
+                            "failure_handling": {
+                              "min_healthy_nodes": 3,
+                              "circuit_breaker_threshold": 0.7,
+                              "grace_period": "30s"
+                            },
+                            "performance": {
+                              "cache_duration": "15s",
+                              "max_concurrent_checks": 20
+                            },
+                            "monitoring": {
+                              "metrics_enabled": true,
+                              "log_level": "info"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "match": [
+                        {
+                          "path": ["/api/*"]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "dynamic_upstreams": {
+                            "source": "blockchain_health",
+                            "environment": {
+                              "api_servers": "http://prod-api-1:1317 http://prod-api-2:1317 http://prod-api-3:1317"
+                            },
+                            "chain": {
+                              "chain_type": "cosmos"
+                            },
+                            "health_check": {
+                              "interval": "5s",
+                              "timeout": "2s"
+                            },
+                            "block_validation": {
+                              "height_threshold": 2,
+                              "external_reference_threshold": 0
+                            },
+                            "failure_handling": {
+                              "min_healthy_nodes": 3
+                            },
+                            "monitoring": {
+                              "metrics_enabled": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "match": [
+                        {
+                          "path": ["/blockchain-health"]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "static_response",
+                          "status_code": 200,
+                          "body": "OK"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            }
+          ]
+        }
+      }
+    }
+  }
 }

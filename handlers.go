@@ -69,28 +69,44 @@ func (c *CosmosHandler) CheckHealth(ctx context.Context, node NodeConfig) (*Node
 		zap.String("url", node.URL),
 		zap.String("type", string(node.Type)))
 
-	// Try RPC endpoint first
-	blockHeight, catchingUp, err := c.checkRPCStatus(ctx, node.URL)
-	if err != nil {
-		c.logger.Debug("RPC check failed, trying REST API",
+	var blockHeight uint64
+	var catchingUp bool
+	var err error
+
+	// Check if this is a REST API node or RPC node
+	if node.Metadata["service_type"] == "api" {
+		// This is a REST API node - use REST directly
+		c.logger.Debug("using REST API for API node",
 			zap.String("node", node.Name),
-			zap.String("url", node.URL),
-			zap.Error(err))
-
-		// If RPC fails and we have an API URL, try REST
-		if node.APIURL != "" {
-			blockHeight, catchingUp, err = c.checkRESTStatus(ctx, node.APIURL)
-		}
-
+			zap.String("url", node.URL))
+		blockHeight, catchingUp, err = c.checkRESTStatus(ctx, node.URL)
+	} else {
+		// This is an RPC node - try RPC first, fallback to REST if available
+		c.logger.Debug("using RPC for RPC node",
+			zap.String("node", node.Name),
+			zap.String("url", node.URL))
+		blockHeight, catchingUp, err = c.checkRPCStatus(ctx, node.URL)
 		if err != nil {
-			c.logger.Warn("all health checks failed for node",
+			c.logger.Debug("RPC check failed, trying REST API fallback",
 				zap.String("node", node.Name),
 				zap.String("url", node.URL),
 				zap.Error(err))
-			health.LastError = err.Error()
-			health.ResponseTime = time.Since(start)
-			return health, nil // Don't return error, just mark as unhealthy
+
+			// If RPC fails and we have an API URL, try REST
+			if node.APIURL != "" {
+				blockHeight, catchingUp, err = c.checkRESTStatus(ctx, node.APIURL)
+			}
 		}
+	}
+
+	if err != nil {
+		c.logger.Warn("all health checks failed for node",
+			zap.String("node", node.Name),
+			zap.String("url", node.URL),
+			zap.Error(err))
+		health.LastError = err.Error()
+		health.ResponseTime = time.Since(start)
+		return health, nil // Don't return error, just mark as unhealthy
 	}
 
 	c.logger.Debug("health check successful",
@@ -131,7 +147,8 @@ func (c *CosmosHandler) GetBlockHeight(ctx context.Context, url string) (uint64,
 	height, _, err := c.checkRPCStatus(ctx, url)
 	if err != nil {
 		// If this looks like a REST URL, try REST instead
-		if strings.Contains(url, ":1317") || strings.Contains(url, "/cosmos/") {
+		// Note: This fallback should rarely be used - prefer explicit service type configuration
+		if strings.Contains(url, "/cosmos/") {
 			height, _, err = c.checkRESTStatus(ctx, url)
 		}
 	}

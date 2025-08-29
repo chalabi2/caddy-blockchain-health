@@ -11,7 +11,14 @@ import (
 
 // NewHealthChecker creates a new health checker instance
 func NewHealthChecker(config *Config, cache *HealthCache, metrics *Metrics, logger *zap.Logger) *HealthChecker {
-	timeout, _ := time.ParseDuration(config.HealthCheck.Timeout)
+	timeout, err := time.ParseDuration(config.HealthCheck.Timeout)
+	if err != nil || timeout == 0 {
+		// Default to 10 seconds if no timeout specified or invalid
+		timeout = 10 * time.Second
+		logger.Debug("using default timeout", zap.Duration("timeout", timeout))
+	} else {
+		logger.Debug("using configured timeout", zap.Duration("timeout", timeout))
+	}
 
 	return &HealthChecker{
 		config:          config,
@@ -31,6 +38,9 @@ func (h *HealthChecker) CheckAllNodes(ctx context.Context) ([]*NodeHealth, error
 		return nil, fmt.Errorf("no nodes configured")
 	}
 
+	h.logger.Debug("starting health checks for all nodes",
+		zap.Int("total_nodes", len(nodes)))
+
 	// Use semaphore pattern to limit concurrent checks
 	sem := make(chan struct{}, h.config.Performance.MaxConcurrentChecks)
 	var wg sync.WaitGroup
@@ -46,12 +56,26 @@ func (h *HealthChecker) CheckAllNodes(ctx context.Context) ([]*NodeHealth, error
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
+			h.logger.Debug("checking node health",
+				zap.String("node", n.Name),
+				zap.String("url", n.URL),
+				zap.String("type", string(n.Type)))
+
 			health := h.checkSingleNode(ctx, n)
 			results[idx] = health
+
+			h.logger.Debug("node health check completed",
+				zap.String("node", n.Name),
+				zap.Bool("healthy", health.Healthy),
+				zap.String("error", health.LastError))
 		}(i, node)
 	}
 
 	wg.Wait()
+
+	h.logger.Debug("all health checks completed",
+		zap.Int("total_nodes", len(nodes)),
+		zap.Int("healthy_nodes", countHealthyNodes(results)))
 
 	// Post-process: validate block heights and update metrics
 	if err := h.validateBlockHeights(results); err != nil {
@@ -64,6 +88,17 @@ func (h *HealthChecker) CheckAllNodes(ctx context.Context) ([]*NodeHealth, error
 	}
 
 	return results, nil
+}
+
+// countHealthyNodes counts the number of healthy nodes
+func countHealthyNodes(results []*NodeHealth) int {
+	count := 0
+	for _, health := range results {
+		if health.Healthy {
+			count++
+		}
+	}
+	return count
 }
 
 // checkSingleNode performs health check on a single node with caching and circuit breaker

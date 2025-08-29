@@ -410,8 +410,9 @@ func (b *BlockchainHealthUpstream) processEnvironmentConfiguration() error {
 		}
 	}
 
-	// Generate external references if not manually configured
-	if len(b.ExternalReferences) == 0 && b.Chain.ChainType != "" {
+	// Generate external references only if explicitly configured
+	// Respect external_reference_threshold setting
+	if len(b.ExternalReferences) == 0 && b.BlockValidation.ExternalReferenceThreshold > 0 {
 		b.generateExternalReferences()
 	}
 
@@ -548,35 +549,11 @@ func (b *BlockchainHealthUpstream) createNodeFromURL(serverURL, serviceType stri
 
 // autoDetectServiceType automatically detects service type and chain type from URL
 func (b *BlockchainHealthUpstream) autoDetectServiceType(parsedURL *url.URL) (serviceType, chainType string) {
-	port := parsedURL.Port()
+	// Don't make assumptions about ports - let the environment configuration determine service types
+	// The service_type is already specified in the environment variables (rpc_servers, api_servers, etc.)
 
-	// Standard Cosmos ports
-	if port == "26657" || port == "12457" { // Akash uses 12457
-		return "rpc", "cosmos"
-	}
-	if port == "1317" || port == "12417" { // Akash uses 12417
-		return "api", "cosmos"
-	}
-
-	// Standard EVM ports
-	if port == "8545" {
-		return "evm", "evm"
-	}
-	if port == "8546" {
-		return "evm_websocket", "evm"
-	}
-
-	// WebSocket detection
-	if parsedURL.Scheme == "ws" || parsedURL.Scheme == "wss" {
-		if strings.Contains(parsedURL.Path, "/websocket") || strings.Contains(parsedURL.Path, "/ws") {
-			return "websocket", "cosmos"
-		}
-		// Default WebSocket to RPC if no specific path
-		return "websocket", "cosmos"
-	}
-
-	// Default to RPC if we can't determine
-	return "rpc", "cosmos"
+	// Default to generic service type - the actual type comes from environment config
+	return "generic", "cosmos"
 }
 
 // generateNodeName generates a unique node name
@@ -593,7 +570,7 @@ func (b *BlockchainHealthUpstream) generateNodeName(chainType, serviceType strin
 // generateWebSocketURL generates WebSocket URL from HTTP URL
 func (b *BlockchainHealthUpstream) generateWebSocketURL(parsedURL *url.URL, chainType string) string {
 	if chainType == "cosmos" {
-		// Cosmos: ws://host:26657/websocket
+		// Cosmos: convert HTTP to WebSocket and add /websocket path
 		wsURL := *parsedURL
 		switch wsURL.Scheme {
 		case "http":
@@ -604,7 +581,7 @@ func (b *BlockchainHealthUpstream) generateWebSocketURL(parsedURL *url.URL, chai
 		wsURL.Path = "/websocket"
 		return wsURL.String()
 	} else if chainType == "evm" {
-		// EVM: ws://host:8546 (different port)
+		// EVM: convert HTTP to WebSocket (no path change needed)
 		wsURL := *parsedURL
 		switch wsURL.Scheme {
 		case "http":
@@ -612,11 +589,6 @@ func (b *BlockchainHealthUpstream) generateWebSocketURL(parsedURL *url.URL, chai
 		case "https":
 			wsURL.Scheme = "wss"
 		}
-		// Change port from 8545 to 8546
-		if parsedURL.Port() == "8545" {
-			wsURL.Host = strings.Replace(wsURL.Host, ":8545", ":8546", 1)
-		}
-		wsURL.Path = ""
 		return wsURL.String()
 	}
 
@@ -624,12 +596,11 @@ func (b *BlockchainHealthUpstream) generateWebSocketURL(parsedURL *url.URL, chai
 }
 
 // generateAPIURL generates REST API URL from RPC URL for Cosmos
+// Note: This is only used when auto-generating API URLs from RPC URLs
+// In most cases, API URLs should be explicitly configured via environment variables
 func (b *BlockchainHealthUpstream) generateAPIURL(parsedURL *url.URL) string {
-	if parsedURL.Port() == "26657" {
-		apiURL := *parsedURL
-		apiURL.Host = strings.Replace(apiURL.Host, ":26657", ":1317", 1)
-		return apiURL.String()
-	}
+	// Don't make assumptions about ports - let users configure API URLs explicitly
+	// This function is kept for backward compatibility but should rarely be used
 	return ""
 }
 
@@ -653,23 +624,20 @@ func (b *BlockchainHealthUpstream) applyChainPreset(preset string) error {
 }
 
 // generateExternalReferences generates external references based on chain type
+// Only generates references if explicitly configured - no hardcoded defaults
 func (b *BlockchainHealthUpstream) generateExternalReferences() {
-	switch b.Chain.ChainType {
-	case "cosmos":
-		b.ExternalReferences = append(b.ExternalReferences, ExternalReference{
-			Name:    "cosmos_public",
-			URL:     "https://cosmos-rpc.publicnode.com",
-			Type:    NodeTypeCosmos,
-			Enabled: true,
-		})
-	case "evm":
-		b.ExternalReferences = append(b.ExternalReferences, ExternalReference{
-			Name:    "ethereum_public",
-			URL:     "https://ethereum-rpc.publicnode.com",
-			Type:    NodeTypeEVM,
-			Enabled: true,
-		})
+	// Only generate external references if they are explicitly configured
+	// No hardcoded defaults to avoid rate limiting and chain-specific issues
+	if len(b.ExternalReferences) == 0 {
+		// No external references configured - this is fine
+		return
+	}
 
+	// If external references are manually configured, validate them
+	for i, ref := range b.ExternalReferences {
+		if ref.URL == "" {
+			b.ExternalReferences[i].Enabled = false
+		}
 	}
 }
 
@@ -703,21 +671,6 @@ func (b *BlockchainHealthUpstream) addAltheaDefaults() {
 		b.BlockValidation.HeightThreshold = 5
 	}
 
-	// Add external references for both Cosmos and EVM protocols if not already configured
-	if len(b.ExternalReferences) == 0 {
-		b.ExternalReferences = append(b.ExternalReferences,
-			ExternalReference{
-				Name:    "cosmos_public",
-				URL:     "https://cosmos-rpc.publicnode.com",
-				Type:    NodeTypeCosmos,
-				Enabled: true,
-			},
-			ExternalReference{
-				Name:    "ethereum_public",
-				URL:     "https://ethereum-rpc.publicnode.com",
-				Type:    NodeTypeEVM,
-				Enabled: true,
-			},
-		)
-	}
+	// No hardcoded external references - let users configure their own
+	// to avoid rate limiting and chain-specific issues
 }

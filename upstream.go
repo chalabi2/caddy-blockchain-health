@@ -18,7 +18,15 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 	defer b.mutex.RUnlock()
 
 	// Get current health status for all nodes
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Use configured timeout or default to 30 seconds for health checks
+	timeout := 30 * time.Second
+	if b.config != nil && b.config.HealthCheck.Timeout != "" {
+		if parsedTimeout, err := time.ParseDuration(b.config.HealthCheck.Timeout); err == nil {
+			timeout = parsedTimeout
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	healthResults, err := b.healthChecker.CheckAllNodes(ctx)
@@ -135,6 +143,13 @@ func (b *BlockchainHealthUpstream) provision(ctx caddy.Context) error {
 
 	// Initialize health checker
 	b.healthChecker = NewHealthChecker(b.config, b.cache, b.metrics, b.logger)
+
+	// Log configuration details for debugging
+	b.logger.Info("blockchain health configuration",
+		zap.String("log_level", b.Monitoring.LogLevel),
+		zap.String("timeout", b.HealthCheck.Timeout),
+		zap.String("check_interval", b.HealthCheck.Interval),
+		zap.Int("min_healthy_nodes", b.FailureHandling.MinHealthyNodes))
 
 	// Start background health checking
 	b.shutdown = make(chan struct{})
