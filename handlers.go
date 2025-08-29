@@ -64,24 +64,39 @@ func (c *CosmosHandler) CheckHealth(ctx context.Context, node NodeConfig) (*Node
 		LastCheck: time.Now(),
 	}
 
+	c.logger.Debug("starting Cosmos health check",
+		zap.String("node", node.Name),
+		zap.String("url", node.URL),
+		zap.String("type", string(node.Type)))
+
 	// Try RPC endpoint first
 	blockHeight, catchingUp, err := c.checkRPCStatus(ctx, node.URL)
 	if err != nil {
+		c.logger.Debug("RPC check failed, trying REST API",
+			zap.String("node", node.Name),
+			zap.String("url", node.URL),
+			zap.Error(err))
+
 		// If RPC fails and we have an API URL, try REST
 		if node.APIURL != "" {
-			c.logger.Debug("RPC check failed, trying REST API",
-				zap.String("node", node.Name),
-				zap.Error(err))
-
 			blockHeight, catchingUp, err = c.checkRESTStatus(ctx, node.APIURL)
 		}
 
 		if err != nil {
+			c.logger.Warn("all health checks failed for node",
+				zap.String("node", node.Name),
+				zap.String("url", node.URL),
+				zap.Error(err))
 			health.LastError = err.Error()
 			health.ResponseTime = time.Since(start)
 			return health, nil // Don't return error, just mark as unhealthy
 		}
 	}
+
+	c.logger.Debug("health check successful",
+		zap.String("node", node.Name),
+		zap.Uint64("block_height", blockHeight),
+		zap.Bool("catching_up", catchingUp))
 
 	// Additionally check WebSocket if configured
 	if node.WebSocketURL != "" {
@@ -101,6 +116,11 @@ func (c *CosmosHandler) CheckHealth(ctx context.Context, node NodeConfig) (*Node
 
 	// Node is healthy if we got a response and it's not catching up
 	health.Healthy = !catchingUp
+
+	c.logger.Debug("health check completed",
+		zap.String("node", node.Name),
+		zap.Bool("healthy", health.Healthy),
+		zap.String("error", health.LastError))
 
 	return health, nil
 }
@@ -122,6 +142,9 @@ func (c *CosmosHandler) GetBlockHeight(ctx context.Context, url string) (uint64,
 func (c *CosmosHandler) checkRPCStatus(ctx context.Context, url string) (uint64, bool, error) {
 	statusURL := fmt.Sprintf("%s/status", strings.TrimSuffix(url, "/"))
 
+	c.logger.Debug("checking RPC status",
+		zap.String("status_url", statusURL))
+
 	req, err := http.NewRequestWithContext(ctx, "GET", statusURL, nil)
 	if err != nil {
 		return 0, false, fmt.Errorf("creating request: %w", err)
@@ -129,9 +152,16 @@ func (c *CosmosHandler) checkRPCStatus(ctx context.Context, url string) (uint64,
 
 	resp, err := c.client.Do(req)
 	if err != nil {
+		c.logger.Debug("RPC request failed",
+			zap.String("url", statusURL),
+			zap.Error(err))
 		return 0, false, fmt.Errorf("RPC request failed: %w", err)
 	}
 	defer resp.Body.Close()
+
+	c.logger.Debug("RPC response received",
+		zap.String("url", statusURL),
+		zap.Int("status_code", resp.StatusCode))
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, false, fmt.Errorf("RPC status %d", resp.StatusCode)
@@ -139,11 +169,23 @@ func (c *CosmosHandler) checkRPCStatus(ctx context.Context, url string) (uint64,
 
 	var status CosmosStatus
 	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		c.logger.Debug("failed to decode RPC response",
+			zap.String("url", statusURL),
+			zap.Error(err))
 		return 0, false, fmt.Errorf("decoding RPC response: %w", err)
 	}
 
+	c.logger.Debug("RPC response decoded",
+		zap.String("url", statusURL),
+		zap.String("block_height", status.Result.SyncInfo.LatestBlockHeight),
+		zap.Bool("catching_up", status.Result.SyncInfo.CatchingUp))
+
 	height, err := strconv.ParseUint(status.Result.SyncInfo.LatestBlockHeight, 10, 64)
 	if err != nil {
+		c.logger.Debug("failed to parse block height",
+			zap.String("url", statusURL),
+			zap.String("height_string", status.Result.SyncInfo.LatestBlockHeight),
+			zap.Error(err))
 		return 0, false, fmt.Errorf("parsing block height: %w", err)
 	}
 
@@ -157,6 +199,9 @@ func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (ui
 	// Check syncing status
 	syncingURL := fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/syncing", baseURL)
 
+	c.logger.Debug("checking REST syncing status",
+		zap.String("syncing_url", syncingURL))
+
 	req, err := http.NewRequestWithContext(ctx, "GET", syncingURL, nil)
 	if err != nil {
 		return 0, false, fmt.Errorf("creating syncing request: %w", err)
@@ -164,9 +209,16 @@ func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (ui
 
 	resp, err := c.client.Do(req)
 	if err != nil {
+		c.logger.Debug("REST syncing request failed",
+			zap.String("url", syncingURL),
+			zap.Error(err))
 		return 0, false, fmt.Errorf("REST syncing request failed: %w", err)
 	}
 	defer resp.Body.Close()
+
+	c.logger.Debug("REST syncing response received",
+		zap.String("url", syncingURL),
+		zap.Int("status_code", resp.StatusCode))
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, false, fmt.Errorf("REST syncing status %d", resp.StatusCode)
@@ -174,11 +226,21 @@ func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (ui
 
 	var syncStatus CosmosRESTSyncing
 	if err := json.NewDecoder(resp.Body).Decode(&syncStatus); err != nil {
+		c.logger.Debug("failed to decode REST syncing response",
+			zap.String("url", syncingURL),
+			zap.Error(err))
 		return 0, false, fmt.Errorf("decoding REST syncing response: %w", err)
 	}
 
+	c.logger.Debug("REST syncing response decoded",
+		zap.String("url", syncingURL),
+		zap.Bool("syncing", syncStatus.Syncing))
+
 	// Get latest block height
 	blockURL := fmt.Sprintf("%s/cosmos/base/tendermint/v1beta1/blocks/latest", baseURL)
+
+	c.logger.Debug("checking REST latest block",
+		zap.String("block_url", blockURL))
 
 	req, err = http.NewRequestWithContext(ctx, "GET", blockURL, nil)
 	if err != nil {
@@ -187,9 +249,16 @@ func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (ui
 
 	resp, err = c.client.Do(req)
 	if err != nil {
-		return 0, false, fmt.Errorf("REST block request failed: %w", err)
+		c.logger.Debug("REST block request failed",
+			zap.String("url", blockURL),
+			zap.Error(err))
+		return 0, false, fmt.Errorf("REST block status %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
+
+	c.logger.Debug("REST block response received",
+		zap.String("url", blockURL),
+		zap.Int("status_code", resp.StatusCode))
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, false, fmt.Errorf("REST block status %d", resp.StatusCode)
@@ -197,14 +266,26 @@ func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (ui
 
 	var blockResp CosmosRESTLatestBlock
 	if err := json.NewDecoder(resp.Body).Decode(&blockResp); err != nil {
+		c.logger.Debug("failed to decode REST block response",
+			zap.String("url", blockURL),
+			zap.Error(err))
 		return 0, false, fmt.Errorf("decoding REST block response: %w", err)
 	}
 
+	c.logger.Debug("REST block response decoded",
+		zap.String("url", blockURL),
+		zap.String("height", blockResp.Block.Header.Height))
+
 	height, err := strconv.ParseUint(blockResp.Block.Header.Height, 10, 64)
 	if err != nil {
-		return 0, false, fmt.Errorf("parsing block height: %w", err)
+		c.logger.Debug("failed to parse REST block height",
+			zap.String("url", blockURL),
+			zap.String("height_string", blockResp.Block.Header.Height),
+			zap.Error(err))
+		return 0, false, fmt.Errorf("parsing REST block height: %w", err)
 	}
 
+	// For REST API, syncing = catching up
 	return height, syncStatus.Syncing, nil
 }
 

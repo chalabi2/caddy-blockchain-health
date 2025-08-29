@@ -546,31 +546,36 @@ func (b *BlockchainHealthUpstream) createNodeFromURL(serverURL, serviceType stri
 	return node, nil
 }
 
-// autoDetectServiceType detects service type and chain type from URL
+// autoDetectServiceType automatically detects service type and chain type from URL
 func (b *BlockchainHealthUpstream) autoDetectServiceType(parsedURL *url.URL) (serviceType, chainType string) {
 	port := parsedURL.Port()
-	path := parsedURL.Path
 
-	switch port {
-	case "26657":
+	// Standard Cosmos ports
+	if port == "26657" || port == "12457" { // Akash uses 12457
 		return "rpc", "cosmos"
-	case "1317":
+	}
+	if port == "1317" || port == "12417" { // Akash uses 12417
 		return "api", "cosmos"
-	case "8545":
-		return "rpc", "evm"
-	case "8546":
-		return "websocket", "evm"
 	}
 
-	// Check path patterns
-	if strings.Contains(path, "/websocket") {
+	// Standard EVM ports
+	if port == "8545" {
+		return "evm", "evm"
+	}
+	if port == "8546" {
+		return "evm_websocket", "evm"
+	}
+
+	// WebSocket detection
+	if parsedURL.Scheme == "ws" || parsedURL.Scheme == "wss" {
+		if strings.Contains(parsedURL.Path, "/websocket") || strings.Contains(parsedURL.Path, "/ws") {
+			return "websocket", "cosmos"
+		}
+		// Default WebSocket to RPC if no specific path
 		return "websocket", "cosmos"
 	}
-	if strings.Contains(path, "/cosmos/") {
-		return "api", "cosmos"
-	}
 
-	// Default fallback
+	// Default to RPC if we can't determine
 	return "rpc", "cosmos"
 }
 
@@ -631,7 +636,7 @@ func (b *BlockchainHealthUpstream) generateAPIURL(parsedURL *url.URL) string {
 // applyChainPreset applies predefined chain configuration
 func (b *BlockchainHealthUpstream) applyChainPreset(preset string) error {
 	switch preset {
-	case "cosmos-hub":
+	case "cosmos", "cosmos-hub":
 		b.Chain.ChainType = "cosmos"
 		b.addCosmosHubDefaults()
 	case "ethereum":
