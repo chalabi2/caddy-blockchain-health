@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g., v1.0.0)"
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+
+      - name: Set version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install xcaddy
+        run: go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+
+      - name: Build with xcaddy
+        run: xcaddy build --with github.com/chalabi2/caddy-blockchain-health=.
+
+      - name: Test binary
+        run: ./caddy version
+
+      - name: Create release archive
+        run: |
+          mkdir -p release
+          cp caddy release/caddy-blockchain-health-${{ steps.version.outputs.version }}-linux-amd64
+          cd release
+          tar -czf caddy-blockchain-health-${{ steps.version.outputs.version }}-linux-amd64.tar.gz caddy-blockchain-health-${{ steps.version.outputs.version }}-linux-amd64
+          sha256sum caddy-blockchain-health-${{ steps.version.outputs.version }}-linux-amd64.tar.gz > caddy-blockchain-health-${{ steps.version.outputs.version }}-linux-amd64.tar.gz.sha256
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Caddy Blockchain Health ${{ steps.version.outputs.version }}
+          body: |
+            ## Caddy Blockchain Health ${{ steps.version.outputs.version }}
+
+            ### Features
+            - Dynamic blockchain node health monitoring
+            - Automatic failover between healthy nodes
+            - Support for Cosmos and EVM chains
+            - Circuit breaker pattern for fault tolerance
+            - Prometheus metrics integration
+            - Configurable health check intervals and timeouts
+
+            ### Installation
+            Download the binary for your platform and make it executable:
+            ```bash
+            chmod +x caddy-blockchain-health-${{ steps.version.outputs.version }}-linux-amd64
+            ```
+
+            ### Configuration
+            See the example configurations in `example_configs/` directory.
+
+            ### Changes
+            See the [CHANGELOG](CHANGELOG.md) for detailed changes.
+          files: |
+            release/caddy-blockchain-health-${{ steps.version.outputs.version }}-linux-amd64.tar.gz
+            release/caddy-blockchain-health-${{ steps.version.outputs.version }}-linux-amd64.tar.gz.sha256
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

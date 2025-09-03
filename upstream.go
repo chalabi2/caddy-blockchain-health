@@ -77,8 +77,48 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 			zap.Int("healthy", healthyCount),
 			zap.Int("minimum_required", b.config.FailureHandling.MinHealthyNodes))
 
-		// In this case, we might want to return all nodes or fallback nodes
-		// For now, we'll return what we have but log the issue
+		// Only fallback to unhealthy nodes if we have NO healthy nodes at all
+		if healthyCount == 0 {
+			b.logger.Info("no healthy nodes available, falling back to all nodes",
+				zap.Int("total_nodes", len(healthResults)),
+				zap.Int("healthy_nodes", healthyCount))
+
+			// Return all nodes (including unhealthy ones) as last resort
+			upstreams = []*reverseproxy.Upstream{}
+			for _, health := range healthResults {
+				// Find the corresponding node config for weight
+				var weight int = 1
+				for _, node := range b.config.Nodes {
+					if node.Name == health.Name {
+						weight = node.Weight
+						break
+					}
+				}
+
+				// Parse URL for upstream
+				parsedURL, err := url.Parse(health.URL)
+				if err != nil {
+					b.logger.Warn("invalid node URL", zap.String("node", health.Name), zap.String("url", health.URL))
+					continue
+				}
+
+				upstream := &reverseproxy.Upstream{
+					Dial: parsedURL.Host,
+				}
+
+				// Add weight if specified
+				if weight > 1 {
+					upstream.MaxRequests = weight
+				}
+
+				upstreams = append(upstreams, upstream)
+			}
+		} else {
+			// We have some healthy nodes, just log the warning but keep using only healthy nodes
+			b.logger.Info("using available healthy nodes despite insufficient count",
+				zap.Int("healthy_nodes", healthyCount),
+				zap.Int("minimum_required", b.config.FailureHandling.MinHealthyNodes))
+		}
 	}
 
 	b.logger.Debug("upstreams selected",

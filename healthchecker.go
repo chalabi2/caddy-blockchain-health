@@ -52,9 +52,20 @@ func (h *HealthChecker) CheckAllNodes(ctx context.Context) ([]*NodeHealth, error
 		go func(idx int, n NodeConfig) {
 			defer wg.Done()
 
-			// Acquire semaphore
-			sem <- struct{}{}
-			defer func() { <-sem }()
+			// Acquire semaphore with context cancellation
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				// Context cancelled, return early
+				results[idx] = &NodeHealth{
+					Name:      n.Name,
+					URL:       n.URL,
+					Healthy:   false,
+					LastError: ctx.Err().Error(),
+				}
+				return
+			}
 
 			h.logger.Debug("checking node health",
 				zap.String("node", n.Name),

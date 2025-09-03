@@ -1,6 +1,6 @@
 # Blockchain Health Dynamic Upstream
 
-[![codecov](https://codecov.io/gh/chalabi2/caddy-blockchain-health/branch/main/graph/badge.svg)](https://codecov.io/gh/chalabi2/caddy-blockchain-health)
+[![codecov](https://codecov.io/gh/chalabi2/caddy-blockchain-health/graph/badge.svg?token=18AC52SBNE)](https://codecov.io/gh/chalabi2/caddy-blockchain-health)
 [![Go Report Card](https://goreportcard.com/badge/github.com/chalabi2/caddy-blockchain-health)](https://goreportcard.com/report/github.com/chalabi2/caddy-blockchain-health)
 [![Go Reference](https://pkg.go.dev/badge/github.com/chalabi2/caddy-blockchain-health.svg)](https://pkg.go.dev/github.com/chalabi2/caddy-blockchain-health)
 

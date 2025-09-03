@@ -1,0 +1,136 @@
+name: Build
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [1.22, 1.23]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-build-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-${{ matrix.go-version }}-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Install xcaddy
+        run: go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+
+      - name: Build with xcaddy (blockchain health module)
+        run: xcaddy build --with github.com/chalabi2/caddy-blockchain-health=.
+
+      - name: Test binary
+        run: ./caddy version
+
+      - name: List modules to verify integration
+        run: ./caddy list-modules | grep -E "(blockchain|health|upstream)"
+
+      - name: Validate example Caddyfile
+        run: ./caddy validate --config example_configs/Caddyfile --adapter caddyfile
+        env:
+          COSMOS_RPC_SERVERS: "http://cosmos-1:26657 http://cosmos-2:26657 http://cosmos-3:26657"
+          COSMOS_API_SERVERS: "http://api-1:1317 http://api-2:1317"
+          ETH_SERVERS: "http://eth-1:8545 http://eth-2:8545"
+          ETH_WS_SERVERS: "ws://eth-1:8546 ws://eth-2:8546"
+          ALTHEA_RPC_SERVERS: "http://althea-rpc-1:26657 http://althea-rpc-2:26657"
+          ALTHEA_API_SERVERS: "http://althea-api-1:1317 http://althea-api-2:1317"
+          ALTHEA_EVM_SERVERS: "http://althea-evm-1:8545 http://althea-evm-2:8545"
+          ALTHEA_EVM_WS_SERVERS: "ws://althea-evm-1:8546 ws://althea-evm-2:8546"
+          DEV_RPC_SERVERS: "http://localhost:26657"
+          DEV_API_SERVERS: "http://localhost:1317"
+          PROD_COSMOS_RPC: "http://prod-rpc-1:26657 http://prod-rpc-2:26657 http://prod-rpc-3:26657"
+          PROD_COSMOS_API: "http://prod-api-1:1317 http://prod-api-2:1317 http://prod-api-3:1317"
+
+      - name: Validate example JSON config
+        run: ./caddy validate --config example_configs/config.json
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: caddy-blockchain-health-go${{ matrix.go-version }}
+          path: ./caddy
+          retention-days: 7
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: latest
+          args: --timeout=10m
+
+  validate-configs:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download built binary
+        uses: actions/download-artifact@v4
+        with:
+          name: caddy-blockchain-health-go1.23
+          path: .
+
+      - name: Make binary executable
+        run: chmod +x ./caddy
+
+      - name: Validate all example configurations
+        run: |
+          echo "Validating Caddyfile..."
+          ./caddy validate --config example_configs/Caddyfile --adapter caddyfile
+
+          echo "Validating JSON config..."
+          ./caddy validate --config example_configs/config.json
+
+          echo "Checking for proper module registration..."
+          ./caddy list-modules | grep "http.handlers.blockchain_health" || (echo "Module not found!" && exit 1)
+
+          echo "All configurations validated successfully!"
+        env:
+          COSMOS_RPC_SERVERS: "http://cosmos-1:26657 http://cosmos-2:26657 http://cosmos-3:26657"
+          COSMOS_API_SERVERS: "http://api-1:1317 http://api-2:1317"
+          ETH_SERVERS: "http://eth-1:8545 http://eth-2:8545"
+          ETH_WS_SERVERS: "ws://eth-1:8546 ws://eth-2:8546"
+          ALTHEA_RPC_SERVERS: "http://althea-rpc-1:26657 http://althea-rpc-2:26657"
+          ALTHEA_API_SERVERS: "http://althea-api-1:1317 http://althea-api-2:1317"
+          ALTHEA_EVM_SERVERS: "http://althea-evm-1:8545 http://althea-evm-2:8545"
+          ALTHEA_EVM_WS_SERVERS: "ws://althea-evm-1:8546 ws://althea-evm-2:8546"
+          DEV_RPC_SERVERS: "http://localhost:26657"
+          DEV_API_SERVERS: "http://localhost:1317"
+          PROD_COSMOS_RPC: "http://prod-rpc-1:26657 http://prod-rpc-2:26657 http://prod-rpc-3:26657"
+          PROD_COSMOS_API: "http://prod-api-1:1317 http://prod-api-2:1317 http://prod-api-3:1317"
