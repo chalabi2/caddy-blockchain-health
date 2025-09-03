@@ -57,7 +57,7 @@ func TestCosmosHandler_CheckHealth(t *testing.T) {
 				if r.URL.Path == "/status" {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
-					w.Write([]byte(tt.response))
+					_, _ = w.Write([]byte(tt.response))
 				} else {
 					http.NotFound(w, r)
 				}
@@ -133,7 +133,7 @@ func TestEVMHandler_CheckHealth(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(tt.response))
+				_, _ = w.Write([]byte(tt.response))
 			}))
 			defer server.Close()
 
@@ -177,7 +177,7 @@ func TestCosmosHandler_GetBlockHeight(t *testing.T) {
 		}`
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(response))
+		_, _ = w.Write([]byte(response))
 	}))
 	defer server.Close()
 
@@ -207,7 +207,7 @@ func TestEVMHandler_GetBlockHeight(t *testing.T) {
 		}`
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(response))
+		_, _ = w.Write([]byte(response))
 	}))
 	defer server.Close()
 

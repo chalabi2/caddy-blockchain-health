@@ -457,10 +457,6 @@ func (b *BlockchainHealthUpstream) processServerLists() error {
 
 	for _, config := range serverConfigs {
 		if config.servers != "" {
-			chainType := config.chainType
-			if chainType == "" {
-				chainType = b.Chain.ChainType
-			}
 			if err := b.parseServersFromEnv(config.servers, config.serviceType); err != nil {
 				return fmt.Errorf("parsing %s servers: %w", config.serviceType, err)
 			}
@@ -569,7 +565,8 @@ func (b *BlockchainHealthUpstream) generateNodeName(chainType, serviceType strin
 
 // generateWebSocketURL generates WebSocket URL from HTTP URL
 func (b *BlockchainHealthUpstream) generateWebSocketURL(parsedURL *url.URL, chainType string) string {
-	if chainType == "cosmos" {
+	switch chainType {
+	case "cosmos":
 		// Cosmos: convert HTTP to WebSocket and add /websocket path
 		wsURL := *parsedURL
 		switch wsURL.Scheme {
@@ -580,7 +577,7 @@ func (b *BlockchainHealthUpstream) generateWebSocketURL(parsedURL *url.URL, chai
 		}
 		wsURL.Path = "/websocket"
 		return wsURL.String()
-	} else if chainType == "evm" {
+	case "evm":
 		// EVM: convert HTTP to WebSocket (no path change needed)
 		wsURL := *parsedURL
 		switch wsURL.Scheme {
@@ -590,9 +587,9 @@ func (b *BlockchainHealthUpstream) generateWebSocketURL(parsedURL *url.URL, chai
 			wsURL.Scheme = "wss"
 		}
 		return wsURL.String()
+	default:
+		return ""
 	}
-
-	return ""
 }
 
 // generateAPIURL generates REST API URL from RPC URL for Cosmos

@@ -7,11 +7,11 @@ import (
 )
 
 func init() {
-	caddy.RegisterModule(BlockchainHealthUpstream{})
+	caddy.RegisterModule(&BlockchainHealthUpstream{})
 }
 
 // CaddyModule returns the Caddy module information.
-func (BlockchainHealthUpstream) CaddyModule() caddy.ModuleInfo {
+func (*BlockchainHealthUpstream) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
 		ID:  "http.reverse_proxy.upstreams.blockchain_health",
 		New: func() caddy.Module { return new(BlockchainHealthUpstream) },

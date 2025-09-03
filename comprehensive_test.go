@@ -52,7 +52,7 @@ func testCosmosRPCHealthCheck(t *testing.T, logger *zap.Logger) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		} else {
 			http.NotFound(w, r)
 		}
@@ -92,7 +92,8 @@ func testCosmosRPCHealthCheck(t *testing.T, logger *zap.Logger) {
 func testCosmosAPIHealthCheck(t *testing.T, logger *zap.Logger) {
 	// Test server that responds with REST API endpoint
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/cosmos/base/tendermint/v1beta1/blocks/latest" {
+		switch r.URL.Path {
+		case "/cosmos/base/tendermint/v1beta1/blocks/latest":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 
@@ -104,16 +105,16 @@ func testCosmosAPIHealthCheck(t *testing.T, logger *zap.Logger) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
-		} else if r.URL.Path == "/cosmos/base/tendermint/v1beta1/syncing" {
+			_, _ = w.Write([]byte(response))
+		case "/cosmos/base/tendermint/v1beta1/syncing":
 			// Also serve the syncing endpoint that the handler checks
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			response := `{
 				"syncing": false
 			}`
-			w.Write([]byte(response))
-		} else {
+			_, _ = w.Write([]byte(response))
+		default:
 			http.NotFound(w, r)
 		}
 	}))
@@ -158,7 +159,7 @@ func testEVMHealthCheck(t *testing.T, logger *zap.Logger) {
 				"id": 1,
 				"result": "0x12345"
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		} else {
 			http.NotFound(w, r)
 		}

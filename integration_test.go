@@ -27,7 +27,7 @@ func TestIntegrationEndToEnd(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer healthyCosmosServer.Close()
@@ -41,7 +41,7 @@ func TestIntegrationEndToEnd(t *testing.T) {
 				"id": 1,
 				"result": "0x12345"
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer healthyEVMServer.Close()
@@ -58,7 +58,7 @@ func TestIntegrationEndToEnd(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer unhealthyServer.Close()
@@ -76,7 +76,7 @@ func TestIntegrationEndToEnd(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer externalServer.Close()
@@ -229,6 +229,7 @@ func TestIntegrationEndToEnd(t *testing.T) {
 		retrieved := upstream.cache.Get("test-node")
 		if retrieved == nil {
 			t.Error("Expected to retrieve cached health result")
+			return
 		}
 
 		if retrieved.Name != "test-node" {
@@ -272,7 +273,7 @@ func TestIntegrationWithRealisticScenarios(t *testing.T) {
 						}
 					}`
 				}
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			}
 		}))
 		defer server.Close()
@@ -361,7 +362,7 @@ func TestIntegrationWithRealisticScenarios(t *testing.T) {
 						}
 					}
 				}`
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			}
 		}))
 		defer healthyServer.Close()

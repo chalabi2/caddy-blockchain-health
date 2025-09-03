@@ -174,7 +174,11 @@ func (c *CosmosHandler) checkRPCStatus(ctx context.Context, url string) (uint64,
 			zap.Error(err))
 		return 0, false, fmt.Errorf("RPC request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			c.logger.Debug("Failed to close response body", zap.Error(err))
+		}
+	}()
 
 	c.logger.Debug("RPC response received",
 		zap.String("url", statusURL),
@@ -231,7 +235,11 @@ func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (ui
 			zap.Error(err))
 		return 0, false, fmt.Errorf("REST syncing request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			c.logger.Debug("Failed to close response body", zap.Error(err))
+		}
+	}()
 
 	c.logger.Debug("REST syncing response received",
 		zap.String("url", syncingURL),
@@ -271,7 +279,11 @@ func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (ui
 			zap.Error(err))
 		return 0, false, fmt.Errorf("REST block status %d", resp.StatusCode)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			c.logger.Debug("Failed to close response body", zap.Error(err))
+		}
+	}()
 
 	c.logger.Debug("REST block response received",
 		zap.String("url", blockURL),
@@ -339,7 +351,11 @@ func (c *CosmosHandler) checkWebSocketHealth(ctx context.Context, wsURL string) 
 		c.logger.Debug("WebSocket connection failed", zap.String("url", u.String()), zap.Error(err))
 		return false
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			c.logger.Debug("Failed to close connection", zap.Error(err))
+		}
+	}()
 
 	// Test with a simple Cosmos WebSocket subscription
 	testMsg := map[string]interface{}{
@@ -358,7 +374,10 @@ func (c *CosmosHandler) checkWebSocketHealth(ctx context.Context, wsURL string) 
 	}
 
 	// Set read deadline for response
-	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if err := conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		c.logger.Debug("Failed to set read deadline", zap.Error(err))
+		return false
+	}
 
 	// Try to read response
 	var response map[string]interface{}
@@ -469,7 +488,11 @@ func (e *EVMHandler) GetBlockHeight(ctx context.Context, url string) (uint64, er
 	if err != nil {
 		return 0, fmt.Errorf("JSON-RPC request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			e.logger.Debug("Failed to close response body", zap.Error(err))
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("JSON-RPC status %d", resp.StatusCode)
@@ -533,7 +556,11 @@ func (e *EVMHandler) checkWebSocketHealth(ctx context.Context, wsURL string) boo
 		e.logger.Debug("WebSocket connection failed", zap.String("url", u.String()), zap.Error(err))
 		return false
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			e.logger.Debug("Failed to close connection", zap.Error(err))
+		}
+	}()
 
 	// Test with a simple EVM WebSocket subscription (newHeads)
 	testMsg := map[string]interface{}{
@@ -550,7 +577,10 @@ func (e *EVMHandler) checkWebSocketHealth(ctx context.Context, wsURL string) boo
 	}
 
 	// Set read deadline for response
-	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if err := conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		e.logger.Debug("Failed to set read deadline", zap.Error(err))
+		return false
+	}
 
 	// Try to read response
 	var response map[string]interface{}

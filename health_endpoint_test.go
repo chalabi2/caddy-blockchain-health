@@ -28,7 +28,7 @@ func TestHealthEndpoint(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer healthyServer.Close()
@@ -45,7 +45,7 @@ func TestHealthEndpoint(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer unhealthyServer.Close()
@@ -63,7 +63,7 @@ func TestHealthEndpoint(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer externalServer.Close()
@@ -160,7 +160,7 @@ func TestHealthEndpointResponseStructure(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer testServer.Close()
@@ -239,7 +239,7 @@ func TestExternalReferenceCheck(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer externalServer.Close()
@@ -257,7 +257,7 @@ func TestExternalReferenceCheck(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer testServer.Close()

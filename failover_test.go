@@ -27,7 +27,7 @@ func TestFailoverScenario(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		} else {
 			http.NotFound(w, r)
 		}
@@ -44,7 +44,7 @@ func TestFailoverScenario(t *testing.T) {
 				"id": 1,
 				"result": "0x12345"
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		} else {
 			http.NotFound(w, r)
 		}
@@ -64,7 +64,7 @@ func TestFailoverScenario(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		} else {
 			http.NotFound(w, r)
 		}
@@ -84,7 +84,7 @@ func TestFailoverScenario(t *testing.T) {
 					"message": "Server error"
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		} else {
 			http.NotFound(w, r)
 		}
@@ -247,7 +247,7 @@ func TestFailoverWithNoHealthyNodes(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer unhealthyServer1.Close()
@@ -264,7 +264,7 @@ func TestFailoverWithNoHealthyNodes(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer unhealthyServer2.Close()
@@ -338,7 +338,7 @@ func TestFailoverWithTimeout(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer fastServer.Close()
@@ -460,7 +460,7 @@ func TestFailoverWithCircuitBreaker(t *testing.T) {
 					}
 				}
 			}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 	defer healthyServer.Close()
@@ -529,17 +529,6 @@ func TestFailoverWithCircuitBreaker(t *testing.T) {
 	}
 
 	t.Logf("Circuit breaker failover test completed successfully")
-}
-
-// isTimeoutError checks if an error is timeout-related
-func isTimeoutError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	return contains(errStr, "timeout") ||
-		contains(errStr, "deadline exceeded") ||
-		contains(errStr, "context deadline exceeded")
 }
 
 // contains checks if a string contains a substring

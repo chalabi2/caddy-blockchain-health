@@ -43,7 +43,7 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 			healthyCount++
 
 			// Find the corresponding node config for weight
-			var weight int = 1
+			weight := 1
 			for _, node := range b.config.Nodes {
 				if node.Name == health.Name {
 					weight = node.Weight
@@ -87,7 +87,7 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 			upstreams = []*reverseproxy.Upstream{}
 			for _, health := range healthResults {
 				// Find the corresponding node config for weight
-				var weight int = 1
+				weight := 1
 				for _, node := range b.config.Nodes {
 					if node.Name == health.Name {
 						weight = node.Weight
