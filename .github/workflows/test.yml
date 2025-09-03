@@ -53,12 +53,13 @@ jobs:
           echo "Total test functions found above"
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: chalabi2/caddy-blockchain-health
+          files: ./coverage.txt
           flags: all-tests
           name: codecov-blockchain-health-go${{ matrix.go-version }}
-          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
       - name: Upload coverage artifacts
