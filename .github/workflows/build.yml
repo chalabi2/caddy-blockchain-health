@@ -118,7 +118,7 @@ jobs:
           ./caddy validate --config example_configs/config.json
 
           echo "Checking for proper module registration..."
-          ./caddy list-modules | grep "http.handlers.blockchain_health" || (echo "Module not found!" && exit 1)
+          ./caddy list-modules | grep "http.reverse_proxy.upstreams.blockchain_health" || (echo "Module not found!" && exit 1)
 
           echo "All configurations validated successfully!"
         env:
