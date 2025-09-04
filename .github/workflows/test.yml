@@ -56,7 +56,6 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: chalabi2/caddy-blockchain-health
           files: ./coverage.txt
           flags: all-tests
           name: codecov-blockchain-health-go${{ matrix.go-version }}
