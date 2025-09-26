@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -329,13 +330,27 @@ func TestCaddyIntegration(t *testing.T) {
 
 	t.Run("BackgroundHealthChecking_Works", func(t *testing.T) {
 		// Test that background health checking works
-		serverHealthy := true
+		var serverHealthy sync.Mutex
+		healthy := true
+
+		getServerHealth := func() bool {
+			serverHealthy.Lock()
+			defer serverHealthy.Unlock()
+			return healthy
+		}
+
+		setServerHealth := func(h bool) {
+			serverHealthy.Lock()
+			defer serverHealthy.Unlock()
+			healthy = h
+		}
+
 		dynamicServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/status" {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				var response string
-				if serverHealthy {
+				if getServerHealth() {
 					response = `{"result": {"sync_info": {"latest_block_height": "12345", "catching_up": false}}}`
 				} else {
 					response = `{"result": {"sync_info": {"latest_block_height": "12300", "catching_up": true}}}`
@@ -381,7 +396,7 @@ func TestCaddyIntegration(t *testing.T) {
 		}
 
 		// Change server to unhealthy
-		serverHealthy = false
+		setServerHealth(false)
 
 		// Wait for background health check to detect change
 		time.Sleep(800 * time.Millisecond) // Wait for interval + cache expiry

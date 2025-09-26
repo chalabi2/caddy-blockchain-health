@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -247,14 +248,28 @@ func TestIntegrationWithRealisticScenarios(t *testing.T) {
 	// Scenario 1: Node becomes unhealthy during operation
 	t.Run("NodeBecomesUnhealthy", func(t *testing.T) {
 		// Create a server that starts healthy but becomes unhealthy
+		var healthyMutex sync.RWMutex
 		healthy := true
+
+		getHealthy := func() bool {
+			healthyMutex.RLock()
+			defer healthyMutex.RUnlock()
+			return healthy
+		}
+
+		setHealthy := func(h bool) {
+			healthyMutex.Lock()
+			defer healthyMutex.Unlock()
+			healthy = h
+		}
+
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/status" {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 
 				var response string
-				if healthy {
+				if getHealthy() {
 					response = `{
 						"result": {
 							"sync_info": {
@@ -318,7 +333,7 @@ func TestIntegrationWithRealisticScenarios(t *testing.T) {
 		}
 
 		// Test 2: Node becomes unhealthy
-		healthy = false
+		setHealthy(false)
 		time.Sleep(2 * time.Second) // Wait for cache to expire
 
 		upstreams, err = upstream.GetUpstreams(&http.Request{})
