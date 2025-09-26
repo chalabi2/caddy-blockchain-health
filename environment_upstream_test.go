@@ -60,9 +60,10 @@ func TestEnvironmentBasedUpstreams(t *testing.T) {
 				expectedURLs[node.URL] = true
 			}
 
-			if node.Metadata["service_type"] == "rpc" {
+			switch node.Metadata["service_type"] {
+			case "rpc":
 				foundRPCCount++
-			} else if node.Metadata["service_type"] == "api" {
+			case "api":
 				foundAPICount++
 			}
 		}
@@ -570,12 +571,12 @@ func createCosmosAPIServer(t *testing.T, blockHeight uint64, syncing bool) *http
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			response := fmt.Sprintf(`{"syncing": %t}`, syncing)
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		case "/cosmos/base/tendermint/v1beta1/blocks/latest":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			response := fmt.Sprintf(`{"block": {"header": {"height": "%d"}}}`, blockHeight)
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		default:
 			http.NotFound(w, r)
 		}

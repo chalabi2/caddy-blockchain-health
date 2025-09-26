@@ -299,14 +299,14 @@ func createMockCosmosRPC(t *testing.T, blockHeight string, catchingUp bool, heal
 						}
 					}
 				}`, blockHeight, catchingUp)
-				fmt.Fprint(w, response)
+				_, _ = fmt.Fprint(w, response)
 			} else {
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			}
 		} else {
 			// Proxy the request (simulate normal operation)
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, `{"result": "proxied request to cosmos rpc", "block_height": "%s", "backend_host": "%s"}`, blockHeight, r.Host)
+			_, _ = fmt.Fprintf(w, `{"result": "proxied request to cosmos rpc", "block_height": "%s", "backend_host": "%s"}`, blockHeight, r.Host)
 		}
 	}))
 }
@@ -329,7 +329,7 @@ func createMockCosmosAPI(t *testing.T, blockHeight string, syncing bool, healthy
 			w.Header().Set("Content-Type", "application/json")
 			if healthy {
 				w.WriteHeader(http.StatusOK)
-				fmt.Fprintf(w, `{"syncing": %t}`, syncing)
+				_, _ = fmt.Fprintf(w, `{"syncing": %t}`, syncing)
 			} else {
 				http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 			}
@@ -337,14 +337,14 @@ func createMockCosmosAPI(t *testing.T, blockHeight string, syncing bool, healthy
 			w.Header().Set("Content-Type", "application/json")
 			if healthy {
 				w.WriteHeader(http.StatusOK)
-				fmt.Fprintf(w, `{"block": {"header": {"height": "%s"}}}`, blockHeight)
+				_, _ = fmt.Fprintf(w, `{"block": {"header": {"height": "%s"}}}`, blockHeight)
 			} else {
 				http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 			}
 		default:
 			// Proxy the request (simulate normal operation)
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, `{"result": "proxied request to cosmos api", "block_height": "%s", "backend_host": "%s"}`, blockHeight, r.Host)
+			_, _ = fmt.Fprintf(w, `{"result": "proxied request to cosmos api", "block_height": "%s", "backend_host": "%s"}`, blockHeight, r.Host)
 		}
 	}))
 }
@@ -366,14 +366,14 @@ func createMockEVMRPC(t *testing.T, blockHeight string, returnError bool, health
 			w.Header().Set("Content-Type", "application/json")
 			if healthy && !returnError {
 				w.WriteHeader(http.StatusOK)
-				fmt.Fprintf(w, `{
+				_, _ = fmt.Fprintf(w, `{
 					"jsonrpc": "2.0",
 					"id": 1,
 					"result": "%s"
 				}`, blockHeight)
 			} else if healthy && returnError {
 				w.WriteHeader(http.StatusOK)
-				fmt.Fprint(w, `{
+				_, _ = fmt.Fprint(w, `{
 					"jsonrpc": "2.0",
 					"id": 1,
 					"error": {
@@ -387,7 +387,7 @@ func createMockEVMRPC(t *testing.T, blockHeight string, returnError bool, health
 		} else {
 			// Proxy the request (simulate normal operation)
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, `{"result": "proxied request to evm rpc", "block_height": "%s", "backend_host": "%s"}`, blockHeight, r.Host)
+			_, _ = fmt.Fprintf(w, `{"result": "proxied request to evm rpc", "block_height": "%s", "backend_host": "%s"}`, blockHeight, r.Host)
 		}
 	}))
 }
@@ -410,7 +410,7 @@ func createControllableMockCosmosRPC(t *testing.T, healthy *bool) *httptest.Serv
 			w.Header().Set("Content-Type", "application/json")
 			if isHealthy {
 				w.WriteHeader(http.StatusOK)
-				fmt.Fprint(w, `{
+				_, _ = fmt.Fprint(w, `{
 					"result": {
 						"sync_info": {
 							"latest_block_height": "12345",
@@ -425,7 +425,7 @@ func createControllableMockCosmosRPC(t *testing.T, healthy *bool) *httptest.Serv
 			// Proxy the request only if healthy
 			if isHealthy {
 				w.WriteHeader(http.StatusOK)
-				fmt.Fprintf(w, `{"result": "proxied request", "backend_host": "%s"}`, r.Host)
+				_, _ = fmt.Fprintf(w, `{"result": "proxied request", "backend_host": "%s"}`, r.Host)
 			} else {
 				http.Error(w, "Node is down", http.StatusServiceUnavailable)
 			}
@@ -524,7 +524,7 @@ func (h *BlockchainHealthUpstream) ServeHTTP(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Proxy request failed", http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Copy response headers
 	for name, values := range resp.Header {
@@ -537,7 +537,7 @@ func (h *BlockchainHealthUpstream) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(resp.StatusCode)
 
 	// Copy body
-	io.Copy(w, resp.Body)
+	_, _ = io.Copy(w, resp.Body)
 }
 
 // Helper functions for testing
@@ -558,7 +558,7 @@ func testLoadBalancing(t *testing.T, serverAddr string, numRequests int) map[str
 
 		// Read response body to see if it contains backend info
 		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		if err == nil {
 			bodyStr := string(body)
@@ -586,13 +586,4 @@ func extractHost(url string) string {
 		return url
 	}
 	return parts[1]
-}
-
-func extractHostFromResponse(resp *http.Response) string {
-	// In a real proxy, we'd need to track this differently
-	// For this test, we'll extract it from the request URL
-	if resp.Request != nil && resp.Request.URL != nil {
-		return resp.Request.URL.Host
-	}
-	return ""
 }

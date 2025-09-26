@@ -206,7 +206,7 @@ func TestCaddyIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Provision failed: %v", err)
 		}
-		defer module.Cleanup()
+		defer func() { _ = module.Cleanup() }()
 
 		// Test that it returns proper Caddy upstream objects
 		upstreams, err := module.GetUpstreams(&http.Request{})
@@ -311,7 +311,7 @@ func TestCaddyIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Provision failed: %v", err)
 		}
-		defer module.Cleanup()
+		defer func() { _ = module.Cleanup() }()
 
 		// Should not error, but should return fallback upstreams
 		upstreams, err := module.GetUpstreams(&http.Request{})
@@ -340,7 +340,7 @@ func TestCaddyIntegration(t *testing.T) {
 				} else {
 					response = `{"result": {"sync_info": {"latest_block_height": "12300", "catching_up": true}}}`
 				}
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			}
 		}))
 		defer dynamicServer.Close()
@@ -369,7 +369,7 @@ func TestCaddyIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Provision failed: %v", err)
 		}
-		defer module.Cleanup()
+		defer func() { _ = module.Cleanup() }()
 
 		// Initial check - should be healthy
 		upstreams, err := module.GetUpstreams(&http.Request{})

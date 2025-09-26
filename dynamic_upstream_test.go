@@ -213,7 +213,7 @@ func TestDynamicUpstreamCore(t *testing.T) {
 				} else {
 					response = `{"result": {"sync_info": {"latest_block_height": "12300", "catching_up": true}}}`
 				}
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			}
 		}))
 		defer dynamicServer.Close()
@@ -480,7 +480,7 @@ func createCosmosServer(t *testing.T, blockHeight uint64, catchingUp bool) *http
 					}
 				}
 			}`, blockHeight, catchingUp)
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		} else {
 			http.NotFound(w, r)
 		}
@@ -510,7 +510,7 @@ func createEVMServer(t *testing.T, blockHeight uint64, returnError bool) *httpte
 					"result": "0x%x"
 				}`, blockHeight)
 			}
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		} else {
 			http.NotFound(w, r)
 		}

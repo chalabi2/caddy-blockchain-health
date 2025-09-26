@@ -25,7 +25,7 @@ func TestUpstreamValidation(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				response := `{"result": {"sync_info": {"latest_block_height": "12345", "catching_up": false}}}`
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			} else {
 				http.NotFound(w, r)
 			}
@@ -38,11 +38,11 @@ func TestUpstreamValidation(t *testing.T) {
 			case "/cosmos/base/tendermint/v1beta1/syncing":
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				fmt.Fprint(w, `{"syncing": false}`)
+				_, _ = fmt.Fprint(w, `{"syncing": false}`)
 			case "/cosmos/base/tendermint/v1beta1/blocks/latest":
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				fmt.Fprint(w, `{"block": {"header": {"height": "12345"}}}`)
+				_, _ = fmt.Fprint(w, `{"block": {"header": {"height": "12345"}}}`)
 			case "/status":
 				// API servers don't typically respond to /status
 				http.NotFound(w, r)
@@ -112,7 +112,7 @@ func TestUpstreamValidation(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 				// Respond to eth_blockNumber
 				response := `{"jsonrpc": "2.0", "id": 1, "result": "0x12345"}`
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			} else {
 				http.NotFound(w, r)
 			}
@@ -125,7 +125,7 @@ func TestUpstreamValidation(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				response := `{"result": {"sync_info": {"latest_block_height": "75557", "catching_up": false}}}`
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			} else {
 				http.NotFound(w, r)
 			}
@@ -175,7 +175,7 @@ func TestUpstreamValidation(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				response := `{"result": {"sync_info": {"latest_block_height": "100000", "catching_up": false}}}`
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			} else {
 				http.NotFound(w, r)
 			}
@@ -187,7 +187,7 @@ func TestUpstreamValidation(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				response := `{"result": {"sync_info": {"latest_block_height": "99998", "catching_up": false}}}` // 2 blocks behind
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			} else {
 				http.NotFound(w, r)
 			}
@@ -199,7 +199,7 @@ func TestUpstreamValidation(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				response := `{"result": {"sync_info": {"latest_block_height": "99990", "catching_up": false}}}` // 10 blocks behind
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			} else {
 				http.NotFound(w, r)
 			}
@@ -272,7 +272,7 @@ func TestUpstreamValidation(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				response := `{"result": {"sync_info": {"latest_block_height": "12345", "catching_up": false}}}`
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			} else {
 				http.NotFound(w, r)
 			}
@@ -284,7 +284,7 @@ func TestUpstreamValidation(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				response := `{"result": {"sync_info": {"latest_block_height": "12340", "catching_up": true}}}`
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			} else {
 				http.NotFound(w, r)
 			}
@@ -399,7 +399,7 @@ func TestUpstreamValidation(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				response := `{"result": {"sync_info": {"latest_block_height": "12345", "catching_up": false}}}`
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			} else {
 				http.NotFound(w, r)
 			}
@@ -412,11 +412,11 @@ func TestUpstreamValidation(t *testing.T) {
 			case "/cosmos/base/tendermint/v1beta1/syncing":
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"syncing": false}`))
+				_, _ = w.Write([]byte(`{"syncing": false}`))
 			case "/cosmos/base/tendermint/v1beta1/blocks/latest":
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"block": {"header": {"height": "12345"}}}`))
+				_, _ = w.Write([]byte(`{"block": {"header": {"height": "12345"}}}`))
 			default:
 				http.NotFound(w, r)
 			}
@@ -429,7 +429,7 @@ func TestUpstreamValidation(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				response := `{"jsonrpc": "2.0", "id": 1, "result": "0x12345"}`
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			} else {
 				http.NotFound(w, r)
 			}
@@ -442,7 +442,7 @@ func TestUpstreamValidation(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				response := `{"jsonrpc": "2.0", "id": 1, "error": {"code": -32000, "message": "Server error"}}`
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			}
 		}))
 		defer failingEVM.Close()
@@ -537,7 +537,7 @@ func TestUpstreamValidation(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			response := `{"result": {"sync_info": {"latest_block_height": "12345", "catching_up": false}}}`
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}))
 		defer cachedServer.Close()
 
