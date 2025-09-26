@@ -48,9 +48,15 @@ jobs:
 
       - name: Verify all tests ran
         run: |
+          echo "Listing all test files in repository..."
+          find . -name "*_test.go" -not -path "./vendor/*" | sort
+          echo ""
           echo "Verifying test coverage includes all test files..."
           go test -list=Test ./... | grep -E "^(Test|Benchmark)" | wc -l
           echo "Total test functions found above"
+          echo ""
+          echo "Test functions by category:"
+          go test -list=Test ./... | grep -E "^Test" | sort
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
