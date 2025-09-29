@@ -442,6 +442,7 @@ func (b *BlockchainHealthUpstream) autoDiscoverFromEnvironment(prefix string) er
 
 // processServerLists processes individual server list configurations
 func (b *BlockchainHealthUpstream) processServerLists() error {
+	// Process non-EVM servers normally
 	serverConfigs := []struct {
 		servers     string
 		serviceType string
@@ -452,7 +453,6 @@ func (b *BlockchainHealthUpstream) processServerLists() error {
 		{b.Environment.APIServers, "api", "cosmos"},
 		{b.Environment.WebSocketServers, "websocket", "cosmos"},
 		{b.Environment.EVMServers, "rpc", "evm"},
-		{b.Environment.EVMWSServers, "websocket", "evm"},
 	}
 
 	for _, config := range serverConfigs {
@@ -460,6 +460,13 @@ func (b *BlockchainHealthUpstream) processServerLists() error {
 			if err := b.parseServersFromEnv(config.servers, config.serviceType); err != nil {
 				return fmt.Errorf("parsing %s servers: %w", config.serviceType, err)
 			}
+		}
+	}
+
+	// Handle EVM WebSocket servers with HTTP URL correlation
+	if b.Environment.EVMWSServers != "" {
+		if err := b.parseEVMWebSocketServers(); err != nil {
+			return fmt.Errorf("parsing EVM WebSocket servers: %w", err)
 		}
 	}
 
@@ -478,6 +485,57 @@ func (b *BlockchainHealthUpstream) parseServersFromEnv(servers, serviceType stri
 		if err != nil {
 			return fmt.Errorf("creating node from URL %s: %w", serverURL, err)
 		}
+		b.Nodes = append(b.Nodes, node)
+	}
+
+	return nil
+}
+
+// parseEVMWebSocketServers parses EVM WebSocket servers and correlates them with HTTP servers
+func (b *BlockchainHealthUpstream) parseEVMWebSocketServers() error {
+	wsServerList := strings.Fields(b.Environment.EVMWSServers)
+	httpServerList := strings.Fields(b.Environment.EVMServers)
+
+	// Create a mapping of hostnames to HTTP URLs for correlation
+	httpURLByHost := make(map[string]string)
+	for _, httpURL := range httpServerList {
+		if parsedURL, err := url.Parse(httpURL); err == nil {
+			hostname := parsedURL.Hostname()
+			httpURLByHost[hostname] = httpURL
+		}
+	}
+
+	// If we have the same number of servers, correlate by index
+	correlateByIndex := len(wsServerList) == len(httpServerList)
+
+	for i, wsURL := range wsServerList {
+		node, err := b.createNodeFromURL(wsURL, "websocket", i)
+		if err != nil {
+			return fmt.Errorf("creating WebSocket node from URL %s: %w", wsURL, err)
+		}
+
+		// Try to find corresponding HTTP URL
+		var httpURL string
+
+		// First try to correlate by hostname
+		if parsedWS, err := url.Parse(wsURL); err == nil {
+			hostname := parsedWS.Hostname()
+			if mappedHTTP, exists := httpURLByHost[hostname]; exists {
+				httpURL = mappedHTTP
+			}
+		}
+
+		// If hostname correlation failed and we have same number of servers, correlate by index
+		if httpURL == "" && correlateByIndex && i < len(httpServerList) {
+			httpURL = httpServerList[i]
+		}
+
+		// Store the HTTP URL in metadata for health checks
+		if httpURL != "" {
+			node.Metadata["http_url"] = httpURL
+		}
+		// Note: If no HTTP URL correlation is found, the health check will fail with a descriptive error
+
 		b.Nodes = append(b.Nodes, node)
 	}
 

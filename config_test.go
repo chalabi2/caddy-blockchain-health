@@ -1,6 +1,7 @@
 package blockchain_health
 
 import (
+	"fmt"
 	"net/url"
 	"testing"
 
@@ -421,4 +422,190 @@ func TestNodeCreationFromURL(t *testing.T) {
 	}
 
 	t.Logf("Node creation from URL test passed")
+}
+
+func TestBlockchainHealthUpstream_ParseEVMWebSocketServers(t *testing.T) {
+	upstream := &BlockchainHealthUpstream{
+		Environment: EnvironmentConfig{
+			// Simulate your exact scenario:
+			// BASE_SERVERS="http://95.216.38.96:13245 http://8.40.118.101:13245"
+			// BASE_WS_SERVERS="http://95.216.38.96:13246 http://8.40.118.101:13246"
+			EVMServers:   "http://95.216.38.96:13245 http://8.40.118.101:13245",
+			EVMWSServers: "http://95.216.38.96:13246 http://8.40.118.101:13246",
+		},
+		Chain: ChainConfig{
+			ChainType: "evm",
+		},
+	}
+
+	// Process the server lists
+	err := upstream.processServerLists()
+	if err != nil {
+		t.Fatalf("Expected no error processing server lists, got: %v", err)
+	}
+
+	// Should have 4 nodes total: 2 HTTP + 2 WebSocket
+	expectedNodeCount := 4
+	if len(upstream.Nodes) != expectedNodeCount {
+		t.Errorf("Expected %d nodes, got %d", expectedNodeCount, len(upstream.Nodes))
+	}
+
+	// Find the WebSocket nodes
+	var wsNodes []NodeConfig
+	var httpNodes []NodeConfig
+	for _, node := range upstream.Nodes {
+		if node.Metadata["service_type"] == "websocket" {
+			wsNodes = append(wsNodes, node)
+		} else {
+			httpNodes = append(httpNodes, node)
+		}
+	}
+
+	// Should have 2 WebSocket nodes and 2 HTTP nodes
+	if len(wsNodes) != 2 {
+		t.Errorf("Expected 2 WebSocket nodes, got %d", len(wsNodes))
+	}
+	if len(httpNodes) != 2 {
+		t.Errorf("Expected 2 HTTP nodes, got %d", len(httpNodes))
+	}
+
+	// Test correlation for first WebSocket node
+	ws1 := wsNodes[0]
+	if ws1.URL != "http://95.216.38.96:13246" {
+		t.Errorf("Expected first WebSocket URL 'http://95.216.38.96:13246', got '%s'", ws1.URL)
+	}
+
+	// Should have correlated HTTP URL in metadata
+	expectedHTTPURL1 := "http://95.216.38.96:13245"
+	if ws1.Metadata["http_url"] != expectedHTTPURL1 {
+		t.Errorf("Expected correlated HTTP URL '%s', got '%s'", expectedHTTPURL1, ws1.Metadata["http_url"])
+	}
+
+	// Test correlation for second WebSocket node
+	ws2 := wsNodes[1]
+	if ws2.URL != "http://8.40.118.101:13246" {
+		t.Errorf("Expected second WebSocket URL 'http://8.40.118.101:13246', got '%s'", ws2.URL)
+	}
+
+	// Should have correlated HTTP URL in metadata
+	expectedHTTPURL2 := "http://8.40.118.101:13245"
+	if ws2.Metadata["http_url"] != expectedHTTPURL2 {
+		t.Errorf("Expected correlated HTTP URL '%s', got '%s'", expectedHTTPURL2, ws2.Metadata["http_url"])
+	}
+
+	// Verify node types
+	for _, node := range wsNodes {
+		if node.Type != NodeTypeEVM {
+			t.Errorf("Expected WebSocket node type EVM, got %s", node.Type)
+		}
+		if node.Metadata["service_type"] != "websocket" {
+			t.Errorf("Expected service_type 'websocket', got '%s'", node.Metadata["service_type"])
+		}
+	}
+
+	t.Logf("✅ EVM WebSocket server correlation test passed")
+	t.Logf("   - WebSocket nodes: %d", len(wsNodes))
+	t.Logf("   - HTTP nodes: %d", len(httpNodes))
+	t.Logf("   - WS1: %s -> HTTP: %s", ws1.URL, ws1.Metadata["http_url"])
+	t.Logf("   - WS2: %s -> HTTP: %s", ws2.URL, ws2.Metadata["http_url"])
+}
+
+func TestBlockchainHealthUpstream_ParseEVMWebSocketServers_MismatchedCount(t *testing.T) {
+	upstream := &BlockchainHealthUpstream{
+		Environment: EnvironmentConfig{
+			// Mismatched server counts - should still work with index correlation for available pairs
+			EVMServers:   "http://node1:8545 http://node2:8545 http://node3:8545",
+			EVMWSServers: "http://node1:8546 http://node2:8546", // Only 2 WebSocket servers
+		},
+		Chain: ChainConfig{
+			ChainType: "evm",
+		},
+	}
+
+	// Process the server lists
+	err := upstream.processServerLists()
+	if err != nil {
+		t.Fatalf("Expected no error processing server lists, got: %v", err)
+	}
+
+	// Should have 5 nodes total: 3 HTTP + 2 WebSocket
+	expectedNodeCount := 5
+	if len(upstream.Nodes) != expectedNodeCount {
+		t.Errorf("Expected %d nodes, got %d", expectedNodeCount, len(upstream.Nodes))
+	}
+
+	// Find the WebSocket nodes
+	var wsNodes []NodeConfig
+	for _, node := range upstream.Nodes {
+		if node.Metadata["service_type"] == "websocket" {
+			wsNodes = append(wsNodes, node)
+		}
+	}
+
+	// Should have 2 WebSocket nodes
+	if len(wsNodes) != 2 {
+		t.Errorf("Expected 2 WebSocket nodes, got %d", len(wsNodes))
+	}
+
+	// First two should have correlations, third HTTP server has no WebSocket pair
+	for i, wsNode := range wsNodes {
+		expectedHTTPURL := fmt.Sprintf("http://node%d:8545", i+1)
+		if wsNode.Metadata["http_url"] != expectedHTTPURL {
+			t.Errorf("WebSocket node %d: expected HTTP URL '%s', got '%s'",
+				i, expectedHTTPURL, wsNode.Metadata["http_url"])
+		}
+	}
+
+	t.Logf("✅ EVM WebSocket server mismatched count test passed")
+}
+
+func TestBlockchainHealthUpstream_ParseEVMWebSocketServers_HostnameCorrelation(t *testing.T) {
+	upstream := &BlockchainHealthUpstream{
+		Environment: EnvironmentConfig{
+			// Different order but same hostnames - should correlate by hostname
+			EVMServers:   "http://node2:8545 http://node1:8545",
+			EVMWSServers: "http://node1:8546 http://node2:8546",
+		},
+		Chain: ChainConfig{
+			ChainType: "evm",
+		},
+	}
+
+	// Process the server lists
+	err := upstream.processServerLists()
+	if err != nil {
+		t.Fatalf("Expected no error processing server lists, got: %v", err)
+	}
+
+	// Find the WebSocket nodes
+	var wsNodes []NodeConfig
+	for _, node := range upstream.Nodes {
+		if node.Metadata["service_type"] == "websocket" {
+			wsNodes = append(wsNodes, node)
+		}
+	}
+
+	// Should have 2 WebSocket nodes
+	if len(wsNodes) != 2 {
+		t.Errorf("Expected 2 WebSocket nodes, got %d", len(wsNodes))
+	}
+
+	// Verify hostname-based correlation
+	for _, wsNode := range wsNodes {
+		if wsNode.URL == "http://node1:8546" {
+			// node1 WebSocket should correlate to node1 HTTP
+			if wsNode.Metadata["http_url"] != "http://node1:8545" {
+				t.Errorf("node1 WebSocket should correlate to 'http://node1:8545', got '%s'",
+					wsNode.Metadata["http_url"])
+			}
+		} else if wsNode.URL == "http://node2:8546" {
+			// node2 WebSocket should correlate to node2 HTTP
+			if wsNode.Metadata["http_url"] != "http://node2:8545" {
+				t.Errorf("node2 WebSocket should correlate to 'http://node2:8545', got '%s'",
+					wsNode.Metadata["http_url"])
+			}
+		}
+	}
+
+	t.Logf("✅ EVM WebSocket hostname correlation test passed")
 }

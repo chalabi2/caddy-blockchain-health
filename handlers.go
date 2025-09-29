@@ -435,6 +435,65 @@ func (e *EVMHandler) CheckHealth(ctx context.Context, node NodeConfig) (*NodeHea
 		LastCheck: time.Now(),
 	}
 
+	e.logger.Debug("starting EVM health check",
+		zap.String("node", node.Name),
+		zap.String("url", node.URL),
+		zap.String("type", string(node.Type)),
+		zap.String("service_type", node.Metadata["service_type"]))
+
+	// Check if this is a WebSocket-only node
+	if node.Metadata["service_type"] == "websocket" {
+		// For WebSocket nodes, look for the corresponding HTTP URL in metadata
+		// This should be set during configuration processing
+		httpURL := node.Metadata["http_url"]
+		if httpURL == "" {
+			health.LastError = "no corresponding HTTP URL found for WebSocket node - check evm_servers configuration"
+			health.ResponseTime = time.Since(start)
+			e.logger.Debug("WebSocket node missing HTTP URL mapping",
+				zap.String("node", node.Name),
+				zap.String("websocket_url", node.URL))
+			return health, nil
+		}
+
+		e.logger.Debug("checking WebSocket node health via HTTP JSON-RPC",
+			zap.String("node", node.Name),
+			zap.String("websocket_url", node.URL),
+			zap.String("http_url", httpURL))
+
+		// Use HTTP JSON-RPC for health check (same as regular EVM nodes)
+		blockHeight, err := e.GetBlockHeight(ctx, httpURL)
+		if err != nil {
+			health.LastError = err.Error()
+			health.ResponseTime = time.Since(start)
+			e.logger.Debug("WebSocket node health check failed via HTTP",
+				zap.String("node", node.Name),
+				zap.String("websocket_url", node.URL),
+				zap.String("http_url", httpURL),
+				zap.Error(err))
+			return health, nil
+		}
+
+		// Health check successful via HTTP, but we'll proxy to WebSocket
+		health.BlockHeight = blockHeight
+		health.Healthy = true
+		health.ResponseTime = time.Since(start)
+		e.logger.Debug("WebSocket node health check successful via HTTP",
+			zap.String("node", node.Name),
+			zap.String("websocket_url", node.URL),
+			zap.String("http_url", httpURL),
+			zap.Uint64("block_height", blockHeight))
+
+		// Additionally verify WebSocket connectivity (optional, non-blocking)
+		if wsHealthy := e.checkWebSocketHealth(ctx, node.URL); !wsHealthy {
+			e.logger.Debug("WebSocket connectivity check failed (node still considered healthy)",
+				zap.String("node", node.Name),
+				zap.String("websocket_url", node.URL))
+		}
+
+		return health, nil
+	}
+
+	// For HTTP/RPC nodes, try to get block height
 	blockHeight, err := e.GetBlockHeight(ctx, node.URL)
 	if err != nil {
 		health.LastError = err.Error()
