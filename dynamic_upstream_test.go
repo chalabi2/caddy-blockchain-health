@@ -364,7 +364,7 @@ func TestDynamicUpstreamAdvanced(t *testing.T) {
 		upstream := createTestUpstream(nodes, logger)
 
 		// Wait for initial health checks to complete to avoid race conditions in CI
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 
 		// Run concurrent GetUpstreams calls
 		results := make(chan int, 10)
@@ -382,8 +382,12 @@ func TestDynamicUpstreamAdvanced(t *testing.T) {
 		// Collect results
 		for i := 0; i < 10; i++ {
 			result := <-results
-			if result != 3 {
-				t.Errorf("Expected 3 upstreams in concurrent call, got %d", result)
+			if result == -1 {
+				t.Errorf("GetUpstreams call %d failed with error", i)
+			} else if result != 3 {
+				// Get current upstreams for debugging
+				upstreams, _ := upstream.GetUpstreams(&http.Request{})
+				t.Errorf("Expected 3 upstreams in concurrent call %d, got %d (current upstreams: %d)", i, result, len(upstreams))
 			}
 		}
 

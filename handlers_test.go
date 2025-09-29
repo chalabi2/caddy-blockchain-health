@@ -287,7 +287,7 @@ func TestEVMHandler_WebSocketWithHTTPCorrelation(t *testing.T) {
 		}`
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(response))
+		_, _ = w.Write([]byte(response))
 	}))
 	defer httpServer.Close()
 
@@ -396,7 +396,7 @@ func TestEVMHandler_WebSocketWithFailedHTTPCorrelation(t *testing.T) {
 	// Mock HTTP server that returns errors (simulating unhealthy HTTP endpoint)
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
+		_, _ = w.Write([]byte("Internal Server Error"))
 	}))
 	defer httpServer.Close()
 

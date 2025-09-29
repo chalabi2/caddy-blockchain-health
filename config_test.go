@@ -592,13 +592,14 @@ func TestBlockchainHealthUpstream_ParseEVMWebSocketServers_HostnameCorrelation(t
 
 	// Verify hostname-based correlation
 	for _, wsNode := range wsNodes {
-		if wsNode.URL == "http://node1:8546" {
+		switch wsNode.URL {
+		case "http://node1:8546":
 			// node1 WebSocket should correlate to node1 HTTP
 			if wsNode.Metadata["http_url"] != "http://node1:8545" {
 				t.Errorf("node1 WebSocket should correlate to 'http://node1:8545', got '%s'",
 					wsNode.Metadata["http_url"])
 			}
-		} else if wsNode.URL == "http://node2:8546" {
+		case "http://node2:8546":
 			// node2 WebSocket should correlate to node2 HTTP
 			if wsNode.Metadata["http_url"] != "http://node2:8545" {
 				t.Errorf("node2 WebSocket should correlate to 'http://node2:8545', got '%s'",

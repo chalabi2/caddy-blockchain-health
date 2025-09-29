@@ -117,8 +117,9 @@ ethereum.example.com {
             handle @evm_websocket {
                 reverse_proxy {
                     dynamic blockchain_health {
-                        evm_ws_servers {$ETH_WS_SERVERS}
-                        service_type "evm_websocket"
+                        # IMPORTANT: Both HTTP and WebSocket servers required for correlation
+                        evm_servers {$ETH_SERVERS}        # HTTP endpoints for health checks
+                        evm_ws_servers {$ETH_WS_SERVERS}  # WebSocket endpoints for proxy
                         chain_type "evm"
                         
                         # WebSocket-optimized settings
@@ -198,8 +199,9 @@ althea.example.com {
             handle @evm_websocket {
                 reverse_proxy {
                     dynamic blockchain_health {
-                        evm_ws_servers {$ALTHEA_EVM_WS_SERVERS}
-                        service_type "evm_websocket"
+                        # IMPORTANT: Both HTTP and WebSocket servers required for correlation
+                        evm_servers {$ALTHEA_EVM_SERVERS}        # HTTP endpoints for health checks
+                        evm_ws_servers {$ALTHEA_EVM_WS_SERVERS}  # WebSocket endpoints for proxy
                         chain_type "evm"
                         
                         check_interval "5s"

@@ -389,32 +389,44 @@ export COSMOS_WS_SERVERS="ws://cosmos-node:26657/websocket"
 ethereum-websocket.example.com {
     reverse_proxy {
         dynamic blockchain_health {
-            # Auto-generates WebSocket URLs from HTTP URLs
-            evm_servers {$ETH_SERVERS}
+            # IMPORTANT: Both HTTP and WebSocket servers must be specified
+            # for proper health checking and correlation
+            evm_servers {$ETH_SERVERS}        # HTTP endpoints for health checks
+            evm_ws_servers {$ETH_WS_SERVERS}  # WebSocket endpoints for proxy
             chain_type "evm"
-
-            # Or specify explicit WebSocket servers
-            evm_ws_servers {$ETH_WS_SERVERS}
         }
     }
 }
 ```
 
-Environment variables:
+Environment variables (servers correlated by index/hostname):
 
 ```bash
-export ETH_SERVERS="http://geth-node:8545"
-export ETH_WS_SERVERS="ws://geth-node:8546"
+# HTTP JSON-RPC endpoints (used for health checks)
+export ETH_SERVERS="http://geth-node1:8545 http://geth-node2:8545"
+# WebSocket endpoints (used for proxy, correlated with HTTP endpoints)
+export ETH_WS_SERVERS="ws://geth-node1:8546 ws://geth-node2:8546"
 ```
 
-- ✅ **JSON-RPC WebSocket** - Tests `eth_subscribe` for `newHeads` subscriptions
-- ✅ **Real-time block monitoring** - Validates connectivity for live block feeds
-- ✅ **Standard ports** - Uses typical WebSocket ports (8546 for Ethereum)
+**Custom Ports Example:**
+
+```bash
+# Your production setup with custom ports
+export BASE_SERVERS="http://95.216.38.96:13245 http://8.40.118.101:13245"
+export BASE_WS_SERVERS="ws://95.216.38.96:13246 ws://8.40.118.101:13246"
+```
+
+- ✅ **Intelligent correlation** - Automatically correlates WebSocket and HTTP endpoints by hostname or index
+- ✅ **HTTP health checks** - Uses correlated HTTP endpoints for `eth_blockNumber` validation
+- ✅ **WebSocket proxy** - Routes WebSocket traffic to healthy WebSocket endpoints
+- ✅ **Block height validation** - Full blockchain health checking via HTTP while proxying to WebSocket
+- ✅ **Custom ports supported** - No assumptions about standard ports (8545/8546)
 
 **WebSocket Health Checking:**
 
-- **Non-blocking** - WebSocket failures don't mark nodes as unhealthy if HTTP works
-- **Informational monitoring** - Provides observability into WebSocket connectivity
+- **Correlation-based** - WebSocket nodes use correlated HTTP endpoints for health validation
+- **Full blockchain validation** - Block height, sync status, and external reference checking
+- **Non-blocking WebSocket tests** - Optional WebSocket connectivity verification (informational)
 - **Timeout protection** - 3-second read timeout prevents hanging connections
 - **Protocol-specific tests** - Uses appropriate subscription methods per blockchain type
 
@@ -981,6 +993,82 @@ api.example.com {
 - ✅ **External reference validation** against trusted sources
 - ✅ **Circuit breaker protection** for unhealthy nodes
 - ✅ **Comprehensive monitoring** with Prometheus metrics
+
+## Troubleshooting
+
+### WebSocket Connection Issues
+
+If you're experiencing WebSocket connection failures (e.g., "Received unexpected status code (200 OK)"):
+
+**Problem**: WebSocket upgrade fails because health checks are being performed on WebSocket URLs instead of HTTP URLs.
+
+**Solution**: Ensure both `evm_servers` and `evm_ws_servers` are configured for proper correlation:
+
+```caddy
+handle @websocket {
+    reverse_proxy {
+        dynamic blockchain_health {
+            # ✅ CORRECT: Specify both HTTP and WebSocket servers
+            evm_servers {$BASE_SERVERS}        # HTTP for health checks
+            evm_ws_servers {$BASE_WS_SERVERS}  # WebSocket for proxy
+            chain_type "evm"
+        }
+    }
+}
+```
+
+```bash
+# ✅ CORRECT: Correlated by hostname/index
+export BASE_SERVERS="http://node1:8545 http://node2:8545"
+export BASE_WS_SERVERS="ws://node1:8546 ws://node2:8546"
+```
+
+**Common Mistakes:**
+
+```caddy
+# ❌ WRONG: Only WebSocket servers specified
+dynamic blockchain_health {
+    evm_ws_servers {$BASE_WS_SERVERS}  # Missing HTTP servers for health checks
+    chain_type "evm"
+}
+
+# ❌ WRONG: Old service_type approach (deprecated)
+dynamic blockchain_health {
+    evm_ws_servers {$BASE_WS_SERVERS}
+    service_type "evm_websocket"  # ❌ No longer needed - causes issues
+    chain_type "evm"
+}
+
+# ❌ WRONG: Mismatched server counts
+# BASE_SERVERS="http://node1:8545 http://node2:8545"        # 2 servers
+# BASE_WS_SERVERS="ws://node1:8546"                         # 1 server - can't correlate
+```
+
+**Verification:**
+
+Test your WebSocket connection:
+
+```bash
+# Should work after fix
+websocat wss://your-domain.com/base -H "Authorization: Bearer YOUR_JWT"
+```
+
+### Configuration Validation
+
+**Check correlation in logs:**
+
+```bash
+# Enable debug logging to see correlation
+./caddy run --config Caddyfile --adapter caddyfile
+# Look for: "WebSocket node health check successful via HTTP"
+```
+
+**Health endpoint verification:**
+
+```bash
+curl http://your-domain.com/health
+# Should show both HTTP and WebSocket nodes as healthy
+```
 
 ## Requirements
 

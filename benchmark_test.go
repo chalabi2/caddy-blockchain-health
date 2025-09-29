@@ -79,6 +79,9 @@ func BenchmarkGetUpstreamsWithFailover(b *testing.B) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Simulate random failovers during the benchmark
+	done := make(chan struct{})
+	defer close(done)
+
 	go func() {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
@@ -91,6 +94,8 @@ func BenchmarkGetUpstreamsWithFailover(b *testing.B) {
 				} else {
 					atomic.StoreInt64(&healthy1, 1)
 				}
+			case <-done:
+				return
 			}
 		}
 	}()
@@ -241,7 +246,7 @@ func createBenchmarkServer(b *testing.B, blockHeight uint64, catchingUp bool) *h
 					}
 				}
 			}`, blockHeight, catchingUp)
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		} else {
 			// Simulate JSON-RPC response for proxy requests
 			w.Header().Set("Content-Type", "application/json")
@@ -256,7 +261,7 @@ func createBenchmarkServer(b *testing.B, blockHeight uint64, catchingUp bool) *h
 					}
 				}
 			}`, blockHeight, catchingUp)
-			w.Write([]byte(response))
+			_, _ = w.Write([]byte(response))
 		}
 	}))
 }
@@ -281,10 +286,10 @@ func createControllableBenchmarkServer(b *testing.B, healthy *int64, blockHeight
 						}
 					}
 				}`, blockHeight)
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			} else {
 				w.WriteHeader(http.StatusServiceUnavailable)
-				w.Write([]byte(`{"error": "node unhealthy"}`))
+				_, _ = w.Write([]byte(`{"error": "node unhealthy"}`))
 			}
 		} else {
 			// Simulate JSON-RPC response
@@ -301,7 +306,7 @@ func createControllableBenchmarkServer(b *testing.B, healthy *int64, blockHeight
 						}
 					}
 				}`, blockHeight)
-				w.Write([]byte(response))
+				_, _ = w.Write([]byte(response))
 			} else {
 				http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 			}
