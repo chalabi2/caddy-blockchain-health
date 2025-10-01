@@ -225,40 +225,49 @@ func (h *HealthChecker) validateBlockHeights(healthResults []*NodeHealth) error 
 		return nil
 	}
 
-	// Group nodes by type for validation
-	cosmoNodes := make([]*NodeHealth, 0)
-	evmNodes := make([]*NodeHealth, 0)
+	// Group nodes by chain type for validation (e.g., "ethereum", "base", "akash", "osmosis")
+	chainGroups := make(map[string][]*NodeHealth)
+	chainNodeTypes := make(map[string]NodeType) // Track the NodeType for each chain
 
 	for _, health := range healthResults {
 		if !health.Healthy {
 			continue // Skip unhealthy nodes for validation
 		}
 
-		// Find the node config to get the type
+		// Find the node config to get the chain type
 		for _, node := range h.config.Nodes {
 			if node.Name == health.Name {
-				switch node.Type {
-				case NodeTypeCosmos:
-					cosmoNodes = append(cosmoNodes, health)
-				case NodeTypeEVM:
-					evmNodes = append(evmNodes, health)
+				chainType := node.ChainType
+				if chainType == "" {
+					// Fallback to generic grouping if no chain type specified
+					chainType = string(node.Type)
 				}
+
+				// Group nodes by their specific chain type
+				if chainGroups[chainType] == nil {
+					chainGroups[chainType] = make([]*NodeHealth, 0)
+				}
+				chainGroups[chainType] = append(chainGroups[chainType], health)
+				chainNodeTypes[chainType] = node.Type // Remember the protocol type for this chain
 				break
 			}
 		}
 	}
 
-	// Validate Cosmos nodes
-	if len(cosmoNodes) > 0 {
-		if err := h.validateNodeGroup(cosmoNodes, NodeTypeCosmos); err != nil {
-			h.logger.Warn("Cosmos node validation failed", zap.Error(err))
-		}
-	}
-
-	// Validate EVM nodes
-	if len(evmNodes) > 0 {
-		if err := h.validateNodeGroup(evmNodes, NodeTypeEVM); err != nil {
-			h.logger.Warn("EVM node validation failed", zap.Error(err))
+	// Validate each chain group separately
+	for chainType, nodes := range chainGroups {
+		if len(nodes) > 0 {
+			nodeType := chainNodeTypes[chainType]
+			if err := h.validateNodeGroup(nodes, nodeType); err != nil {
+				h.logger.Warn("chain node validation failed",
+					zap.String("chain_type", chainType),
+					zap.String("node_type", string(nodeType)),
+					zap.Error(err))
+			} else {
+				h.logger.Debug("chain validation completed",
+					zap.String("chain_type", chainType),
+					zap.Int("node_count", len(nodes)))
+			}
 		}
 	}
 

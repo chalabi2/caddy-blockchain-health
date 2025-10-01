@@ -24,6 +24,7 @@ type NodeConfig struct {
 	APIURL       string            `json:"api_url,omitempty"`
 	WebSocketURL string            `json:"websocket_url,omitempty"`
 	Type         NodeType          `json:"type"`
+	ChainType    string            `json:"chain_type,omitempty"`
 	Weight       int               `json:"weight"`
 	Metadata     map[string]string `json:"metadata,omitempty"`
 }
@@ -82,7 +83,8 @@ type EnvironmentConfig struct {
 
 // ChainConfig holds chain-specific configuration
 type ChainConfig struct {
-	ChainType           string `json:"chain_type,omitempty"`             // "cosmos", "evm", "dual"
+	ChainType           string `json:"chain_type,omitempty"`             // Specific chain identifier for grouping ("ethereum", "base", "akash", etc.)
+	NodeType            string `json:"node_type,omitempty"`              // Protocol type for health checker selection ("cosmos", "evm")
 	ChainPreset         string `json:"chain_preset,omitempty"`           // "cosmos-hub", "ethereum", "althea"
 	AutoDiscoverFromEnv string `json:"auto_discover_from_env,omitempty"` // "COSMOS" looks for COSMOS_*_SERVERS
 	ServiceType         string `json:"service_type,omitempty"`           // "rpc", "api", "websocket"

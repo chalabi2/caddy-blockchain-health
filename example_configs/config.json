@@ -1,4 +1,7 @@
 {
+  "_comment": "Blockchain Health Dynamic Upstream - Chain-Specific Configuration",
+  "_description": "This example demonstrates explicit node_type and chain_type configuration for proper chain isolation",
+  "_note": "node_type determines health checker (cosmos/evm), chain_type determines grouping (ethereum/base/akash/etc)",
   "admin": {
     "listen": "localhost:2019"
   },
@@ -33,7 +36,8 @@
                               "rpc_servers": "http://cosmos-1:26657 http://cosmos-2:26657 http://cosmos-3:26657"
                             },
                             "chain": {
-                              "chain_type": "cosmos"
+                              "node_type": "cosmos",
+                              "chain_type": "cosmos-hub"
                             },
                             "health_check": {
                               "interval": "10s",
@@ -68,7 +72,8 @@
                               "api_servers": "http://api-1:1317 http://api-2:1317"
                             },
                             "chain": {
-                              "chain_type": "cosmos"
+                              "node_type": "cosmos",
+                              "chain_type": "cosmos-hub"
                             },
                             "health_check": {
                               "interval": "10s",
@@ -118,7 +123,8 @@
                               "evm_servers": "http://eth-1:8545 http://eth-2:8545"
                             },
                             "chain": {
-                              "chain_type": "evm"
+                              "node_type": "evm",
+                              "chain_type": "ethereum"
                             },
                             "health_check": {
                               "interval": "10s",
@@ -153,7 +159,8 @@
                               "evm_ws_servers": "ws://eth-1:8546 ws://eth-2:8546"
                             },
                             "chain": {
-                              "chain_type": "evm"
+                              "node_type": "evm",
+                              "chain_type": "ethereum"
                             },
                             "health_check": {
                               "interval": "5s",
@@ -203,7 +210,8 @@
                               "rpc_servers": "http://althea-rpc-1:26657 http://althea-rpc-2:26657"
                             },
                             "chain": {
-                              "chain_type": "cosmos"
+                              "node_type": "cosmos",
+                              "chain_type": "cosmos-hub"
                             },
                             "health_check": {
                               "interval": "10s",
@@ -238,7 +246,8 @@
                               "evm_servers": "http://althea-evm-1:8545 http://althea-evm-2:8545"
                             },
                             "chain": {
-                              "chain_type": "evm"
+                              "node_type": "evm",
+                              "chain_type": "ethereum"
                             },
                             "health_check": {
                               "interval": "10s",
@@ -273,7 +282,8 @@
                               "api_servers": "http://althea-api-1:1317 http://althea-api-2:1317"
                             },
                             "chain": {
-                              "chain_type": "cosmos"
+                              "node_type": "cosmos",
+                              "chain_type": "cosmos-hub"
                             },
                             "health_check": {
                               "interval": "10s",
@@ -314,7 +324,7 @@
                       "api_servers": "http://localhost:1317"
                     },
                     "chain": {
-                      "chain_type": "cosmos"
+                      "chain_type": "cosmos-hub"
                     },
                     "health_check": {
                       "interval": "5s",
@@ -361,7 +371,8 @@
                               "rpc_servers": "http://prod-rpc-1:26657 http://prod-rpc-2:26657 http://prod-rpc-3:26657"
                             },
                             "chain": {
-                              "chain_type": "cosmos"
+                              "node_type": "cosmos",
+                              "chain_type": "cosmos-hub"
                             },
                             "health_check": {
                               "interval": "5s",
@@ -403,7 +414,8 @@
                               "api_servers": "http://prod-api-1:1317 http://prod-api-2:1317 http://prod-api-3:1317"
                             },
                             "chain": {
-                              "chain_type": "cosmos"
+                              "node_type": "cosmos",
+                              "chain_type": "cosmos-hub"
                             },
                             "health_check": {
                               "interval": "5s",

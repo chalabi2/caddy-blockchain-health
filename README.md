@@ -74,9 +74,10 @@ Basic Caddyfile configuration using environment variables:
 blockchain-api.example.com {
     reverse_proxy {
         dynamic blockchain_health {
-            # Cosmos Hub preset with automatic configuration
-            chain_preset "cosmos-hub"
-            servers {$COSMOS_SERVERS}
+            # Explicit configuration (recommended)
+            rpc_servers {$COSMOS_SERVERS}
+            node_type "cosmos"      # ← Protocol type (health checker)
+            chain_type "cosmos-hub" # ← Chain identifier (grouping)
 
             # Production settings
             min_healthy_nodes 2
@@ -95,11 +96,12 @@ blockchain-api.example.com {
 ethereum-api.example.com {
     reverse_proxy {
         dynamic blockchain_health {
-            # Ethereum preset with automatic configuration
-            chain_preset "ethereum"
+            # Explicit configuration (recommended)
             evm_servers {$ETH_SERVERS}
+            node_type "evm"        # ← Protocol type (health checker)
+            chain_type "ethereum"  # ← Chain identifier (grouping)
 
-            # Auto-generates WebSocket URLs and external references
+            # Production settings
             min_healthy_nodes 1
             metrics_enabled true
         }
@@ -249,18 +251,19 @@ export DEV_SERVERS="http://localhost:26657 http://localhost:1317 http://localhos
 
 The plugin now supports simplified environment variable-based configuration:
 
-| Option                   | Description                                                         | Example                 |
-| ------------------------ | ------------------------------------------------------------------- | ----------------------- |
-| `servers`                | Generic space-separated server list with auto-detection             | `{$BLOCKCHAIN_SERVERS}` |
-| `rpc_servers`            | Cosmos RPC servers (port 26657)                                     | `{$COSMOS_RPC_SERVERS}` |
-| `api_servers`            | Cosmos REST API servers (port 1317)                                 | `{$COSMOS_API_SERVERS}` |
-| `websocket_servers`      | Cosmos WebSocket servers                                            | `{$COSMOS_WS_SERVERS}`  |
-| `evm_servers`            | EVM JSON-RPC servers (port 8545)                                    | `{$ETH_SERVERS}`        |
-| `evm_ws_servers`         | EVM WebSocket servers (port 8546)                                   | `{$ETH_WS_SERVERS}`     |
-| `chain_preset`           | Predefined chain configuration (`cosmos-hub`, `ethereum`, `althea`) | `"cosmos-hub"`          |
-| `auto_discover_from_env` | Auto-discover from environment variables with prefix                | `"COSMOS"`              |
-| `chain_type`             | Blockchain type (`cosmos`, `evm`)                                   | `"cosmos"`              |
-| `legacy_mode`            | Backward compatibility mode                                         | `true`                  |
+| Option                   | Description                                                                     | Example                 |
+| ------------------------ | ------------------------------------------------------------------------------- | ----------------------- |
+| `servers`                | Generic space-separated server list with auto-detection                         | `{$BLOCKCHAIN_SERVERS}` |
+| `rpc_servers`            | Cosmos RPC servers (port 26657)                                                 | `{$COSMOS_RPC_SERVERS}` |
+| `api_servers`            | Cosmos REST API servers (port 1317)                                             | `{$COSMOS_API_SERVERS}` |
+| `websocket_servers`      | Cosmos WebSocket servers                                                        | `{$COSMOS_WS_SERVERS}`  |
+| `evm_servers`            | EVM JSON-RPC servers (port 8545)                                                | `{$ETH_SERVERS}`        |
+| `evm_ws_servers`         | EVM WebSocket servers (port 8546)                                               | `{$ETH_WS_SERVERS}`     |
+| `chain_preset`           | Predefined chain configuration (`cosmos-hub`, `ethereum`, `althea`)             | `"cosmos-hub"`          |
+| `auto_discover_from_env` | Auto-discover from environment variables with prefix                            | `"COSMOS"`              |
+| `chain_type`             | Specific blockchain identifier for grouping (`ethereum`, `base`, `akash`, etc.) | `"cosmos"`              |
+| `node_type`              | Protocol type for health checker selection (`cosmos`, `evm`)                    | Auto-detected           |
+| `legacy_mode`            | Backward compatibility mode                                                     | `true`                  |
 
 #### Traditional Node Settings (Legacy)
 
@@ -497,6 +500,173 @@ export ETH_LIGHT_SERVERS="http://light-node:8545"
 | **Endpoints**       | Separate RPC/REST URLs possible                       | Single JSON-RPC endpoint       |
 | **Sync Status**     | `catching_up` boolean                                 | Block height comparison        |
 | **Differentiation** | Service type (RPC vs REST)                            | Node type (archive/full/light) |
+
+#### 🔗 **Chain-Specific Grouping** ✨ **New Feature**
+
+**Problem Solved**: Previously, all EVM chains (Ethereum, Base, Arbitrum, etc.) were compared against each other, causing nodes to be incorrectly marked as unhealthy due to vastly different block heights across chains.
+
+**Solution**: The system now uses two separate configuration fields:
+
+- **`node_type`**: Determines which health checker to use (`cosmos` or `evm`)
+- **`chain_type`**: Groups nodes for block height validation (e.g., `ethereum`, `base`, `akash`)
+
+**Before (❌ Cross-Chain Comparison)**:
+
+```
+All EVM nodes grouped together:
+- Ethereum node: 36,282,000 blocks
+- Base node: 23,485,000 blocks
+- Arbitrum node: 7,829,000 blocks
+→ Base and Arbitrum marked unhealthy (millions of blocks "behind" Ethereum)
+```
+
+**After (✅ Chain-Specific Isolation)**:
+
+```
+Each chain has its own validation pool:
+- Ethereum pool: [ethereum nodes only] → compared among themselves
+- Base pool: [base nodes only] → compared among themselves
+- Arbitrum pool: [arbitrum nodes only] → compared among themselves
+→ All nodes healthy within their respective chains
+```
+
+**Configuration Examples:**
+
+```caddy
+# Ethereum nodes - isolated validation pool
+ethereum.api.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            evm_servers {$ETH_SERVERS}
+            node_type "evm"        # ← Protocol type (health checker selection)
+            chain_type "ethereum"  # ← Chain identifier (grouping)
+            block_height_threshold 3
+        }
+    }
+}
+
+# Base nodes - separate validation pool
+base.api.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            evm_servers {$BASE_SERVERS}
+            node_type "evm"        # ← Same protocol as Ethereum
+            chain_type "base"      # ← Different chain (separate group)
+            block_height_threshold 5
+        }
+    }
+}
+
+# Arbitrum nodes - separate validation pool
+arbitrum.api.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            evm_servers {$ARBITRUM_SERVERS}
+            node_type "evm"        # ← Same protocol as Ethereum/Base
+            chain_type "arbitrum"  # ← Different chain (separate group)
+            block_height_threshold 10
+        }
+    }
+}
+```
+
+**Cosmos Chains Work Similarly:**
+
+```caddy
+# Akash nodes - isolated validation
+akash.api.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            rpc_servers {$AKASH_RPC_SERVERS}
+            node_type "cosmos"     # ← Protocol type (health checker selection)
+            chain_type "akash"     # ← Chain identifier (grouping)
+        }
+    }
+}
+
+# Osmosis nodes - separate validation
+osmosis.api.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            rpc_servers {$OSMOSIS_RPC_SERVERS}
+            node_type "cosmos"     # ← Same protocol as Akash
+            chain_type "osmosis"   # ← Different chain (separate group)
+        }
+    }
+}
+```
+
+**Key Benefits:**
+
+- ✅ **No cross-chain interference** - Base nodes won't be marked unhealthy because Ethereum has higher block numbers
+- ✅ **Accurate health validation** - Each chain validates against its own network state
+- ✅ **Proper failover** - Only truly lagging nodes within the same chain are removed
+- ✅ **Multi-chain support** - Run multiple blockchain APIs with confidence
+- ✅ **Explicit configuration** - No hardcoded chain names, users specify both protocol and chain
+- ✅ **Backward compatibility** - Existing configurations continue to work
+
+### **Configuration Approaches**
+
+#### **Recommended: Explicit Configuration**
+
+For maximum clarity and control, explicitly specify both `node_type` and `chain_type`:
+
+```caddy
+# Ethereum configuration
+ethereum.api.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            evm_servers {$ETH_SERVERS}
+            node_type "evm"        # ← Protocol (determines health checker)
+            chain_type "ethereum"  # ← Chain ID (determines grouping)
+        }
+    }
+}
+
+# Base configuration (same protocol, different chain)
+base.api.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            evm_servers {$BASE_SERVERS}
+            node_type "evm"        # ← Same protocol as Ethereum
+            chain_type "base"      # ← Different chain (separate validation)
+        }
+    }
+}
+
+# Custom EVM chain
+my-chain.api.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            evm_servers {$CUSTOM_SERVERS}
+            node_type "evm"           # ← EVM protocol
+            chain_type "my-l2-chain"  # ← Custom chain name
+        }
+    }
+}
+```
+
+#### **Legacy: Auto-Detection (Backward Compatibility)**
+
+Existing configurations without explicit `node_type` continue to work:
+
+```caddy
+# Auto-detects node_type based on chain_type
+legacy.api.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            evm_servers {$ETH_SERVERS}
+            chain_type "ethereum"  # ← Auto-detects node_type as "evm"
+        }
+    }
+}
+```
+
+**Auto-Detection Rules:**
+
+- Known Cosmos chains: `cosmos`, `cosmos-hub`, `akash`, `osmosis`, `juno`, etc. → `node_type "cosmos"`
+- Known EVM chains: `ethereum`, `base`, `arbitrum`, `polygon`, etc. → `node_type "evm"`
+- Unknown chains: Falls back to URL-based detection
 
 #### 📊 **Block Height Validation Strategy**
 
@@ -926,15 +1096,16 @@ api.example.com {
 }
 ```
 
-### After (Environment Variable Approach)
+### After (Explicit Configuration Approach)
 
 ```caddy
 api.example.com {
     reverse_proxy {
         dynamic blockchain_health {
-            # Chain preset with automatic configuration
-            chain_preset "cosmos-hub"
-            servers {$COSMOS_SERVERS}
+            # Explicit configuration (recommended)
+            rpc_servers {$COSMOS_SERVERS}
+            node_type "cosmos"      # ← Protocol type (health checker)
+            chain_type "cosmos-hub" # ← Chain identifier (grouping)
 
             # Enhanced settings
             check_interval "15s"
@@ -960,12 +1131,14 @@ api.example.com {
             node node1 {
                 url "http://node1:26657"
                 type "cosmos"
+                chain_type "cosmos-hub"  # ← Can specify chain_type per node
                 weight 100
             }
 
             node node2 {
                 url "http://node2:26657"
                 type "cosmos"
+                chain_type "cosmos-hub"  # ← Same chain for grouping
                 weight 100
             }
 
@@ -977,12 +1150,13 @@ api.example.com {
 }
 ```
 
-**Benefits of Environment Variable Approach**:
+**Benefits of Explicit Configuration Approach**:
 
-- ✅ **Simplified configuration** - No manual node definitions
+- ✅ **Clear separation of concerns** - Protocol type vs chain identifier
+- ✅ **No hardcoded chain names** - Support any blockchain without code changes
+- ✅ **Simplified configuration** - No manual node definitions needed
 - ✅ **Auto-discovery** - Automatic detection of service types
-- ✅ **Chain presets** - Predefined configurations for major blockchains
-- ✅ **WebSocket auto-generation** - Automatic WebSocket URL creation
+- ✅ **Custom chain support** - Define your own L2s and testnets
 - ✅ **Environment integration** - Better CI/CD and deployment workflows
 - ✅ **Backward compatibility** - Legacy mode for existing configurations
 

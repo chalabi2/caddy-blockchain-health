@@ -191,6 +191,16 @@ func (b *BlockchainHealthUpstream) parseCaddyfile(d *caddyfile.Dispenser) error 
 				}
 				b.Chain.ChainType = d.Val()
 
+			case "node_type":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				nodeType := d.Val()
+				if nodeType != "cosmos" && nodeType != "evm" {
+					return d.Errf("invalid node_type: %s (must be 'cosmos' or 'evm')", nodeType)
+				}
+				b.Chain.NodeType = nodeType
+
 			case "chain_preset":
 				if !d.NextArg() {
 					return d.ArgErr()
@@ -288,6 +298,12 @@ func (b *BlockchainHealthUpstream) parseNode(d *caddyfile.Dispenser) (NodeConfig
 				return node, d.Errf("invalid node type: %s (must be 'cosmos' or 'evm')", nodeType)
 			}
 			node.Type = NodeType(nodeType)
+
+		case "chain_type":
+			if !d.NextArg() {
+				return node, d.ArgErr()
+			}
+			node.ChainType = d.Val()
 
 		case "weight":
 			if !d.NextArg() {
@@ -564,10 +580,14 @@ func (b *BlockchainHealthUpstream) createNodeFromURL(serverURL, serviceType stri
 		chainType = detectedChain
 	}
 
-	// Use detected chain type if chain type is not set or is generic
-	actualNodeType := chainType
-	if chainType == "" || chainType == "dual" {
-		actualNodeType = detectedChain
+	// Use explicit node_type if provided, otherwise fall back to detection
+	actualNodeType := b.Chain.NodeType
+	if actualNodeType == "" {
+		// Fall back to auto-detection for backward compatibility
+		actualNodeType = b.mapChainTypeToProtocol(chainType)
+		if actualNodeType == "" {
+			actualNodeType = detectedChain
+		}
 	}
 
 	// Generate node name
@@ -575,18 +595,20 @@ func (b *BlockchainHealthUpstream) createNodeFromURL(serverURL, serviceType stri
 
 	// Create basic node configuration
 	node = NodeConfig{
-		Name:   nodeName,
-		URL:    serverURL,
-		Type:   NodeType(actualNodeType),
-		Weight: 100, // Default weight
+		Name:      nodeName,
+		URL:       serverURL,
+		Type:      NodeType(actualNodeType),
+		ChainType: chainType, // Store the specific chain type (e.g., "ethereum", "base", "akash")
+		Weight:    100,       // Default weight
 		Metadata: map[string]string{
 			"service_type":   serviceType,
 			"auto_generated": "true",
 			"source":         "environment",
+			"chain_type":     chainType, // Also store in metadata for backward compatibility
 		},
 	}
 
-	// Auto-generate WebSocket URL if needed
+	// Auto-generate WebSocket URL if needed (use protocol type, not specific chain type)
 	if wsURL := b.generateWebSocketURL(parsedURL, actualNodeType); wsURL != "" {
 		node.WebSocketURL = wsURL
 	}
@@ -608,6 +630,31 @@ func (b *BlockchainHealthUpstream) autoDetectServiceType(parsedURL *url.URL) (se
 
 	// Default to generic service type - the actual type comes from environment config
 	return "generic", "cosmos"
+}
+
+// mapChainTypeToProtocol maps specific chain types to their protocol types
+func (b *BlockchainHealthUpstream) mapChainTypeToProtocol(chainType string) string {
+	switch chainType {
+	// Cosmos SDK chains
+	case "cosmos", "cosmos-hub", "akash", "osmosis", "juno", "secret", "stargaze", "regen", "althea-cosmos", "dev-cosmos":
+		return "cosmos"
+	// EVM chains
+	case "evm", "ethereum", "base", "arbitrum", "polygon", "bsc", "avalanche", "optimism", "althea-evm":
+		return "evm"
+	// Dual protocol chains (use the specific service type)
+	case "dual":
+		return "" // Let caller handle this case
+	default:
+		// For unknown chain types, try to infer from common patterns
+		if strings.Contains(strings.ToLower(chainType), "evm") ||
+			strings.Contains(strings.ToLower(chainType), "ethereum") {
+			return "evm"
+		}
+		if strings.Contains(strings.ToLower(chainType), "cosmos") {
+			return "cosmos"
+		}
+		return "" // Unknown, let caller handle
+	}
 }
 
 // generateNodeName generates a unique node name

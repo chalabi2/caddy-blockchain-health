@@ -1,40 +1,31 @@
-# Blockchain Health Dynamic Upstream - Environment Variable Configuration
-# This example demonstrates the simplified environment-based configuration
+# Blockchain Health Dynamic Upstream - Chain-Specific Configuration
 
 {
     admin localhost:2019
 }
 
-# 1. Cosmos Chain with Environment Variables (Recommended for Production)
 cosmos.example.com {
-    # WebSocket matcher for Cosmos chains
     @cosmos_websocket {
         header Connection *Upgrade*
         header Upgrade websocket
     }
 
     route {
-        # Cosmos RPC endpoints with WebSocket support
         handle /rpc/* {
             uri strip_prefix /rpc
-            
-            # Handle WebSocket connections
             handle @cosmos_websocket {
                 reverse_proxy {
                     dynamic blockchain_health {
                         rpc_servers {$COSMOS_RPC_SERVERS}
                         service_type "websocket"
-                        chain_type "cosmos"
-                        
-                        # WebSocket-optimized settings
+                        node_type "cosmos"
+                        chain_type "cosmos-hub"
                         check_interval "5s"
                         timeout "3s"
                         block_height_threshold 10
                         min_healthy_nodes 1
                         metrics_enabled true
                     }
-
-                    # WebSocket headers
                     header_up Connection {http.request.header.Connection}
                     header_up Upgrade {http.request.header.Upgrade}
                     header_up X-Forwarded-For {remote_ip}
@@ -42,14 +33,12 @@ cosmos.example.com {
                 }
             }
 
-            # Handle regular HTTP requests
             reverse_proxy {
                 dynamic blockchain_health {
                     rpc_servers {$COSMOS_RPC_SERVERS}
                     service_type "rpc"
-                    chain_type "cosmos"
-                    
-                    # Production settings
+                    node_type "cosmos"
+                    chain_type "cosmos-hub"
                     check_interval "10s"
                     timeout "10s"
                     block_height_threshold 3
@@ -60,16 +49,14 @@ cosmos.example.com {
             }
         }
 
-        # Cosmos REST API endpoints
         handle /api/* {
             uri strip_prefix /api
             reverse_proxy {
                 dynamic blockchain_health {
                     api_servers {$COSMOS_API_SERVERS}
                     service_type "api"
-                    chain_type "cosmos"
-                    
-                    # API-specific settings
+                    node_type "cosmos"
+                    chain_type "cosmos-hub"
                     check_interval "10s"
                     timeout "10s"
                     block_height_threshold 3
@@ -82,25 +69,21 @@ cosmos.example.com {
     }
 }
 
-# 2. EVM Chain with Environment Variables
 ethereum.example.com {
-    # WebSocket matcher for EVM chains
     @evm_websocket {
         header Connection *Upgrade*
         header Upgrade websocket
     }
 
     route {
-        # EVM JSON-RPC endpoints
         handle /rpc/* {
             uri strip_prefix /rpc
             reverse_proxy {
                 dynamic blockchain_health {
                     evm_servers {$ETH_SERVERS}
                     service_type "evm"
-                    chain_type "evm"
-                    
-                    # EVM-specific settings
+                    node_type "evm"
+                    chain_type "ethereum"
                     check_interval "10s"
                     timeout "10s"
                     block_height_threshold 3
@@ -111,26 +94,21 @@ ethereum.example.com {
             }
         }
 
-        # EVM WebSocket endpoints
         handle /ws/* {
             uri strip_prefix /ws
             handle @evm_websocket {
                 reverse_proxy {
                     dynamic blockchain_health {
-                        # IMPORTANT: Both HTTP and WebSocket servers required for correlation
-                        evm_servers {$ETH_SERVERS}        # HTTP endpoints for health checks
-                        evm_ws_servers {$ETH_WS_SERVERS}  # WebSocket endpoints for proxy
-                        chain_type "evm"
-                        
-                        # WebSocket-optimized settings
+                        evm_servers {$ETH_SERVERS}
+                        evm_ws_servers {$ETH_WS_SERVERS}
+                        node_type "evm"
+                        chain_type "ethereum"
                         check_interval "5s"
                         timeout "3s"
                         block_height_threshold 10
                         min_healthy_nodes 1
                         metrics_enabled true
                     }
-
-                    # WebSocket headers
                     header_up Connection {http.request.header.Connection}
                     header_up Upgrade {http.request.header.Upgrade}
                     header_up X-Forwarded-For {remote_ip}
@@ -141,9 +119,73 @@ ethereum.example.com {
     }
 }
 
-# 3. Multi-Protocol Chain (Althea - Cosmos + EVM)
+base.example.com {
+    @base_websocket {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+
+    route {
+        handle /rpc/* {
+            uri strip_prefix /rpc
+            reverse_proxy {
+                dynamic blockchain_health {
+                    evm_servers {$BASE_SERVERS}
+                    service_type "evm"
+                    node_type "evm"
+                    chain_type "base"
+                    check_interval "10s"
+                    timeout "10s"
+                    block_height_threshold 5
+                    min_healthy_nodes 1
+                    metrics_enabled true
+                    external_reference_threshold 0
+                }
+            }
+        }
+
+        handle /ws/* {
+            uri strip_prefix /ws
+            handle @base_websocket {
+                reverse_proxy {
+                    dynamic blockchain_health {
+                        evm_servers {$BASE_SERVERS}
+                        evm_ws_servers {$BASE_WS_SERVERS}
+                        node_type "evm"
+                        chain_type "base"
+                        check_interval "5s"
+                        timeout "3s"
+                        block_height_threshold 10
+                        min_healthy_nodes 1
+                        metrics_enabled true
+                    }
+                    header_up Connection {http.request.header.Connection}
+                    header_up Upgrade {http.request.header.Upgrade}
+                    header_up X-Forwarded-For {remote_ip}
+                    header_up X-Real-IP {remote_ip}
+                }
+            }
+        }
+    }
+}
+
+arbitrum.example.com {
+    reverse_proxy {
+        dynamic blockchain_health {
+            evm_servers {$ARBITRUM_SERVERS}
+            node_type "evm"
+            chain_type "arbitrum"
+            check_interval "8s"
+            timeout "5s"
+            block_height_threshold 10
+            min_healthy_nodes 1
+            metrics_enabled true
+            external_reference_threshold 0
+        }
+    }
+}
+
 althea.example.com {
-    # WebSocket matchers
     @cosmos_websocket {
         header Connection *Upgrade*
         header Upgrade websocket
@@ -155,15 +197,14 @@ althea.example.com {
     }
 
     route {
-        # Althea Cosmos RPC
         handle /rpc/cosmos/* {
             uri strip_prefix /rpc/cosmos
             reverse_proxy {
                 dynamic blockchain_health {
                     rpc_servers {$ALTHEA_RPC_SERVERS}
                     service_type "rpc"
-                    chain_type "cosmos"
-                    
+                    node_type "cosmos"
+                    chain_type "althea-cosmos"
                     check_interval "10s"
                     timeout "10s"
                     block_height_threshold 3
@@ -174,15 +215,14 @@ althea.example.com {
             }
         }
 
-        # Althea EVM JSON-RPC
         handle /rpc/evm/* {
             uri strip_prefix /rpc/evm
             reverse_proxy {
                 dynamic blockchain_health {
                     evm_servers {$ALTHEA_EVM_SERVERS}
                     service_type "evm"
-                    chain_type "evm"
-                    
+                    node_type "evm"
+                    chain_type "althea-evm"
                     check_interval "10s"
                     timeout "10s"
                     block_height_threshold 3
@@ -193,25 +233,21 @@ althea.example.com {
             }
         }
 
-        # Althea EVM WebSocket
         handle /ws/evm/* {
             uri strip_prefix /ws/evm
             handle @evm_websocket {
                 reverse_proxy {
                     dynamic blockchain_health {
-                        # IMPORTANT: Both HTTP and WebSocket servers required for correlation
-                        evm_servers {$ALTHEA_EVM_SERVERS}        # HTTP endpoints for health checks
-                        evm_ws_servers {$ALTHEA_EVM_WS_SERVERS}  # WebSocket endpoints for proxy
-                        chain_type "evm"
-                        
+                        evm_servers {$ALTHEA_EVM_SERVERS}
+                        evm_ws_servers {$ALTHEA_EVM_WS_SERVERS}
+                        node_type "evm"
+                        chain_type "althea-evm"
                         check_interval "5s"
                         timeout "3s"
                         block_height_threshold 10
                         min_healthy_nodes 1
                         metrics_enabled true
                     }
-
-                    # WebSocket headers
                     header_up Connection {http.request.header.Connection}
                     header_up Upgrade {http.request.header.Upgrade}
                     header_up X-Forwarded-For {remote_ip}
@@ -220,15 +256,14 @@ althea.example.com {
             }
         }
 
-        # Althea API endpoints
         handle /api/* {
             uri strip_prefix /api
             reverse_proxy {
                 dynamic blockchain_health {
                     api_servers {$ALTHEA_API_SERVERS}
                     service_type "api"
-                    chain_type "cosmos"
-                    
+                    node_type "cosmos"
+                    chain_type "althea-cosmos"
                     check_interval "10s"
                     timeout "10s"
                     block_height_threshold 3
@@ -241,106 +276,20 @@ althea.example.com {
     }
 }
 
-# 4. Development Configuration
 dev-blockchain.localhost {
     reverse_proxy {
         dynamic blockchain_health {
-            # Development-friendly settings
             rpc_servers {$DEV_RPC_SERVERS}
             api_servers {$DEV_API_SERVERS}
-            chain_type "cosmos"
-            
-            # Relaxed settings for local development
+            node_type "cosmos"
+            chain_type "dev-cosmos"
             check_interval "5s"
             timeout "10s"
             block_height_threshold 20
             log_level "debug"
-            
-            # Don't require minimum healthy nodes in dev
             min_healthy_nodes 0
             metrics_enabled true
             external_reference_threshold 0
         }
     }
 }
-
-# 5. High-Availability Production Setup
-prod-api.example.com {
-    # WebSocket matcher
-    @cosmos_websocket {
-        header Connection *Upgrade*
-        header Upgrade websocket
-    }
-
-    route {
-        # Production RPC endpoints
-        handle /rpc/* {
-            uri strip_prefix /rpc
-            reverse_proxy {
-                dynamic blockchain_health {
-                    rpc_servers {$PROD_COSMOS_RPC}
-                    service_type "rpc"
-                    chain_type "cosmos"
-                    
-                    # Strict production requirements
-                    check_interval "5s"
-                    timeout "2s"
-                    block_height_threshold 2
-                    
-                    # High availability requirements
-                    min_healthy_nodes 3
-                    circuit_breaker_threshold 0.7
-                    grace_period "30s"
-                    
-                    # Performance optimization
-                    cache_duration "15s"
-                    max_concurrent_checks 20
-                    
-                    # Full monitoring
-                    metrics_enabled true
-                    log_level "info"
-                    external_reference_threshold 0
-                }
-            }
-        }
-
-        # Production API endpoints
-        handle /api/* {
-            uri strip_prefix /api
-            reverse_proxy {
-                dynamic blockchain_health {
-                    api_servers {$PROD_COSMOS_API}
-                    service_type "api"
-                    chain_type "cosmos"
-                    
-                    # Strict production requirements
-                    check_interval "5s"
-                    timeout "2s"
-                    block_height_threshold 2
-                    min_healthy_nodes 3
-                    metrics_enabled true
-                    external_reference_threshold 0
-                }
-            }
-        }
-
-        # Dedicated health endpoint
-        handle /blockchain-health {
-            respond "OK" 200
-        }
-    }
-}
-
-# Example Environment Variables:
-# export COSMOS_RPC_SERVERS="http://cosmos-1:26657 http://cosmos-2:26657 http://cosmos-3:26657"
-# export COSMOS_API_SERVERS="http://api-1:1317 http://api-2:1317"
-# export ETH_SERVERS="http://eth-1:8545 http://eth-2:8545"
-# export ETH_WS_SERVERS="ws://eth-1:8546 ws://eth-2:8546"
-# export ALTHEA_RPC_SERVERS="http://althea-rpc-1:26657 http://althea-rpc-2:26657"
-# export ALTHEA_API_SERVERS="http://althea-api-1:1317 http://althea-api-2:1317"
-# export ALTHEA_EVM_SERVERS="http://althea-evm-1:8545 http://althea-evm-2:8545"
-# export ALTHEA_EVM_WS_SERVERS="ws://althea-evm-1:8546 ws://althea-evm-2:8546"
-# export DEV_RPC_SERVERS="http://localhost:26657"
-# export DEV_API_SERVERS="http://localhost:1317"
-# export PROD_COSMOS_RPC="http://prod-rpc-1:26657 http://prod-rpc-2:26657 http://prod-rpc-3:26657"
-# export PROD_COSMOS_API="http://prod-api-1:1317 http://prod-api-2:1317 http://prod-api-3:1317"
