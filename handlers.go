@@ -483,12 +483,11 @@ func (e *EVMHandler) CheckHealth(ctx context.Context, node NodeConfig) (*NodeHea
 			zap.String("http_url", httpURL),
 			zap.Uint64("block_height", blockHeight))
 
-		// Additionally verify WebSocket connectivity (optional, non-blocking)
-		if wsHealthy := e.checkWebSocketHealth(ctx, node.URL); !wsHealthy {
-			e.logger.Debug("WebSocket connectivity check failed (node still considered healthy)",
-				zap.String("node", node.Name),
-				zap.String("websocket_url", node.URL))
-		}
+		// Skip WebSocket connectivity testing to avoid interference with client connections
+		// WebSocket nodes are validated via HTTP health checks only (block height, sync status)
+		e.logger.Debug("WebSocket node validated via HTTP health check only",
+			zap.String("node", node.Name),
+			zap.String("websocket_url", node.URL))
 
 		return health, nil
 	}
@@ -507,16 +506,14 @@ func (e *EVMHandler) CheckHealth(ctx context.Context, node NodeConfig) (*NodeHea
 	// EVM nodes don't have a "catching up" concept like Cosmos
 	// If we can get a block height, we consider the node healthy
 
-	// Additionally check WebSocket if configured
+	// Skip WebSocket connectivity testing for regular nodes too
+	// WebSocket health is determined by HTTP JSON-RPC health checks only
 	if node.WebSocketURL != "" {
-		wsHealthy := e.checkWebSocketHealth(ctx, node.WebSocketURL)
-		if !wsHealthy {
-			e.logger.Debug("WebSocket health check failed",
-				zap.String("node", node.Name),
-				zap.String("websocket_url", node.WebSocketURL))
-			// WebSocket failure doesn't make the node unhealthy if HTTP works
-			// but we log it for monitoring
-		}
+		e.logger.Debug("Node has WebSocket URL but skipping connection test",
+			zap.String("node", node.Name),
+			zap.String("websocket_url", node.WebSocketURL))
+		// WebSocket nodes are validated via HTTP health checks (block height, sync status)
+		// Actual WebSocket connectivity testing can interfere with client connections
 	}
 
 	return health, nil
@@ -580,74 +577,4 @@ func (e *EVMHandler) GetBlockHeight(ctx context.Context, url string) (uint64, er
 	}
 
 	return height, nil
-}
-
-// checkWebSocketHealth tests WebSocket connectivity for EVM nodes
-func (e *EVMHandler) checkWebSocketHealth(ctx context.Context, wsURL string) bool {
-	// Parse and validate WebSocket URL
-	u, err := url.Parse(wsURL)
-	if err != nil {
-		e.logger.Debug("Invalid WebSocket URL", zap.String("url", wsURL), zap.Error(err))
-		return false
-	}
-
-	// Convert http/https to ws/wss
-	switch u.Scheme {
-	case "http":
-		u.Scheme = "ws"
-	case "https":
-		u.Scheme = "wss"
-	case "ws", "wss":
-		// Already correct
-	default:
-		e.logger.Debug("Unsupported WebSocket scheme", zap.String("scheme", u.Scheme))
-		return false
-	}
-
-	// Create dialer with timeout
-	dialer := websocket.Dialer{
-		HandshakeTimeout: 5 * time.Second,
-	}
-
-	// Attempt WebSocket connection
-	conn, _, err := dialer.DialContext(ctx, u.String(), nil)
-	if err != nil {
-		e.logger.Debug("WebSocket connection failed", zap.String("url", u.String()), zap.Error(err))
-		return false
-	}
-	defer func() {
-		if err := conn.Close(); err != nil {
-			e.logger.Debug("Failed to close connection", zap.Error(err))
-		}
-	}()
-
-	// Test with a simple EVM WebSocket subscription (newHeads)
-	testMsg := map[string]interface{}{
-		"jsonrpc": "2.0",
-		"method":  "eth_subscribe",
-		"params":  []interface{}{"newHeads"},
-		"id":      1,
-	}
-
-	// Send test message
-	if err := conn.WriteJSON(testMsg); err != nil {
-		e.logger.Debug("WebSocket write failed", zap.Error(err))
-		return false
-	}
-
-	// Set read deadline for response
-	if err := conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
-		e.logger.Debug("Failed to set read deadline", zap.Error(err))
-		return false
-	}
-
-	// Try to read response
-	var response map[string]interface{}
-	if err := conn.ReadJSON(&response); err != nil {
-		e.logger.Debug("WebSocket read failed", zap.Error(err))
-		return false
-	}
-
-	e.logger.Debug("WebSocket health check successful", zap.String("url", u.String()))
-	return true
 }
