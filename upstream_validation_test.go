@@ -87,7 +87,8 @@ func TestUpstreamValidation(t *testing.T) {
 			HealthCheck:     upstream.HealthCheck,
 			FailureHandling: upstream.FailureHandling,
 		}
-		upstream.healthChecker = NewHealthChecker(upstream.config, NewHealthCache(1*time.Second), nil, logger)
+		upstream.cache = NewHealthCache(1 * time.Second)
+		upstream.healthChecker = NewHealthChecker(upstream.config, upstream.cache, nil, logger)
 
 		// Test GetUpstreams - both should be healthy via their respective protocols
 		upstreams, err := upstream.GetUpstreams(&http.Request{})
@@ -152,7 +153,8 @@ func TestUpstreamValidation(t *testing.T) {
 			HealthCheck:     upstream.HealthCheck,
 			FailureHandling: upstream.FailureHandling,
 		}
-		upstream.healthChecker = NewHealthChecker(upstream.config, NewHealthCache(1*time.Second), nil, logger)
+		upstream.cache = NewHealthCache(1 * time.Second)
+		upstream.healthChecker = NewHealthChecker(upstream.config, upstream.cache, nil, logger)
 
 		upstreams, err := upstream.GetUpstreams(&http.Request{})
 		if err != nil {
@@ -375,7 +377,8 @@ func TestUpstreamValidation(t *testing.T) {
 			HealthCheck:     upstream.HealthCheck,
 			FailureHandling: upstream.FailureHandling,
 		}
-		upstream.healthChecker = NewHealthChecker(upstream.config, NewHealthCache(1*time.Second), nil, logger)
+		upstream.cache = NewHealthCache(1 * time.Second)
+		upstream.healthChecker = NewHealthChecker(upstream.config, upstream.cache, nil, logger)
 
 		upstreams, err := upstream.GetUpstreams(&http.Request{})
 		if err != nil {

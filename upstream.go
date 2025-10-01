@@ -17,22 +17,29 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 	b.mutex.RLock()
 	defer b.mutex.RUnlock()
 
-	// Get current health status for all nodes
-	// Use configured timeout or default to 30 seconds for health checks
-	timeout := 30 * time.Second
-	if b.config != nil && b.config.HealthCheck.Timeout != "" {
-		if parsedTimeout, err := time.ParseDuration(b.config.HealthCheck.Timeout); err == nil {
-			timeout = parsedTimeout
+	// Get cached health results to avoid running health checks during request processing
+	// This prevents interference with WebSocket upgrades and improves performance
+	healthResults := b.getCachedHealthResults()
+
+	// If no cached results available, fall back to a quick health check
+	if len(healthResults) == 0 {
+		b.logger.Debug("no cached health results available, performing quick health check")
+		timeout := 5 * time.Second // Shorter timeout for request-time health checks
+		if b.config != nil && b.config.HealthCheck.Timeout != "" {
+			if parsedTimeout, err := time.ParseDuration(b.config.HealthCheck.Timeout); err == nil && parsedTimeout < timeout {
+				timeout = parsedTimeout
+			}
 		}
-	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
 
-	healthResults, err := b.healthChecker.CheckAllNodes(ctx)
-	if err != nil {
-		b.logger.Error("failed to check node health", zap.Error(err))
-		return nil, fmt.Errorf("health check failed: %w", err)
+		var err error
+		healthResults, err = b.healthChecker.CheckAllNodes(ctx)
+		if err != nil {
+			b.logger.Error("failed to check node health", zap.Error(err))
+			return nil, fmt.Errorf("health check failed: %w", err)
+		}
 	}
 
 	var upstreams []*reverseproxy.Upstream
@@ -42,19 +49,32 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 		if health.Healthy {
 			healthyCount++
 
-			// Find the corresponding node config for weight
+			// Find the corresponding node config for weight and service type
 			weight := 1
+			var nodeConfig *NodeConfig
 			for _, node := range b.config.Nodes {
 				if node.Name == health.Name {
 					weight = node.Weight
+					nodeConfig = &node
 					break
 				}
 			}
 
+			// Determine the correct URL to use for upstream
+			upstreamURL := health.URL
+
+			// For WebSocket nodes, use the actual WebSocket URL for proxy
+			if nodeConfig != nil && nodeConfig.Metadata["service_type"] == "websocket" {
+				// health.URL should already be the WebSocket URL for WebSocket nodes
+				b.logger.Debug("Using WebSocket URL for upstream",
+					zap.String("node", health.Name),
+					zap.String("websocket_url", upstreamURL))
+			}
+
 			// Parse URL for upstream
-			parsedURL, err := url.Parse(health.URL)
+			parsedURL, err := url.Parse(upstreamURL)
 			if err != nil {
-				b.logger.Warn("invalid node URL", zap.String("node", health.Name), zap.String("url", health.URL))
+				b.logger.Warn("invalid node URL", zap.String("node", health.Name), zap.String("url", upstreamURL))
 				continue
 			}
 
@@ -127,6 +147,35 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 		zap.Int("selected_upstreams", len(upstreams)))
 
 	return upstreams, nil
+}
+
+// getCachedHealthResults retrieves cached health results for all nodes
+// Returns results only if ALL nodes have cached results, otherwise returns empty slice
+func (b *BlockchainHealthUpstream) getCachedHealthResults() []*NodeHealth {
+	if b.healthChecker == nil || b.config == nil {
+		return nil
+	}
+
+	var results []*NodeHealth
+	for _, node := range b.config.Nodes {
+		cached := b.cache.Get(node.Name)
+		if cached == nil {
+			// If any node doesn't have cached results, return empty slice
+			// This forces a full health check to ensure consistency
+			b.logger.Debug("incomplete cached health results, forcing full health check",
+				zap.String("missing_node", node.Name),
+				zap.Int("total_nodes", len(b.config.Nodes)),
+				zap.Int("cached_results", len(results)))
+			return nil
+		}
+		results = append(results, cached)
+	}
+
+	b.logger.Debug("retrieved complete cached health results",
+		zap.Int("total_nodes", len(b.config.Nodes)),
+		zap.Int("cached_results", len(results)))
+
+	return results
 }
 
 // provision sets up the module after configuration parsing
