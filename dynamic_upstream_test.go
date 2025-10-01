@@ -26,8 +26,8 @@ func TestDynamicUpstreamCore(t *testing.T) {
 		defer healthyServer2.Close()
 
 		upstream := createTestUpstream([]NodeConfig{
-			{Name: "healthy-1", URL: healthyServer1.URL, Type: NodeTypeCosmos, Weight: 100},
-			{Name: "healthy-2", URL: healthyServer2.URL, Type: NodeTypeCosmos, Weight: 100},
+			{Name: "healthy-1", URL: healthyServer1.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
+			{Name: "healthy-2", URL: healthyServer2.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
 		}, logger)
 
 		// Test GetUpstreams - should return both healthy nodes
@@ -65,8 +65,8 @@ func TestDynamicUpstreamCore(t *testing.T) {
 		defer unhealthyServer.Close()
 
 		upstream := createTestUpstream([]NodeConfig{
-			{Name: "healthy", URL: healthyServer.URL, Type: NodeTypeCosmos, Weight: 100},
-			{Name: "unhealthy", URL: unhealthyServer.URL, Type: NodeTypeCosmos, Weight: 100},
+			{Name: "healthy", URL: healthyServer.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
+			{Name: "unhealthy", URL: unhealthyServer.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
 		}, logger)
 
 		// Test GetUpstreams - should return only healthy node
@@ -99,9 +99,9 @@ func TestDynamicUpstreamCore(t *testing.T) {
 		defer laggingServer.Close()
 
 		upstream := createTestUpstream([]NodeConfig{
-			{Name: "leader", URL: leaderServer.URL, Type: NodeTypeCosmos, Weight: 100},
-			{Name: "good", URL: goodServer.URL, Type: NodeTypeCosmos, Weight: 100},
-			{Name: "lagging", URL: laggingServer.URL, Type: NodeTypeCosmos, Weight: 100},
+			{Name: "leader", URL: leaderServer.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
+			{Name: "good", URL: goodServer.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
+			{Name: "lagging", URL: laggingServer.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
 		}, logger)
 
 		// Set block height threshold to 5
@@ -140,8 +140,8 @@ func TestDynamicUpstreamCore(t *testing.T) {
 		defer unhealthyServer2.Close()
 
 		upstream := createTestUpstream([]NodeConfig{
-			{Name: "unhealthy-1", URL: unhealthyServer1.URL, Type: NodeTypeCosmos, Weight: 100},
-			{Name: "unhealthy-2", URL: unhealthyServer2.URL, Type: NodeTypeCosmos, Weight: 100},
+			{Name: "unhealthy-1", URL: unhealthyServer1.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
+			{Name: "unhealthy-2", URL: unhealthyServer2.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
 		}, logger)
 
 		// Set minimum healthy nodes requirement
@@ -169,8 +169,8 @@ func TestDynamicUpstreamCore(t *testing.T) {
 		defer heavyServer.Close()
 
 		upstream := createTestUpstream([]NodeConfig{
-			{Name: "light", URL: lightServer.URL, Type: NodeTypeCosmos, Weight: 1},
-			{Name: "heavy", URL: heavyServer.URL, Type: NodeTypeCosmos, Weight: 10},
+			{Name: "light", URL: lightServer.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 1},
+			{Name: "heavy", URL: heavyServer.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 10},
 		}, logger)
 
 		upstreams, err := upstream.GetUpstreams(&http.Request{})
@@ -219,7 +219,7 @@ func TestDynamicUpstreamCore(t *testing.T) {
 		defer dynamicServer.Close()
 
 		upstream := createTestUpstream([]NodeConfig{
-			{Name: "dynamic", URL: dynamicServer.URL, Type: NodeTypeCosmos, Weight: 100},
+			{Name: "dynamic", URL: dynamicServer.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
 		}, logger)
 
 		// Use short cache duration for quick updates
@@ -289,8 +289,8 @@ func TestDynamicUpstreamCore(t *testing.T) {
 		defer evmServer.Close()
 
 		upstream := createTestUpstream([]NodeConfig{
-			{Name: "cosmos", URL: cosmosServer.URL, Type: NodeTypeCosmos, Weight: 100},
-			{Name: "evm", URL: evmServer.URL, Type: NodeTypeEVM, Weight: 100},
+			{Name: "cosmos", URL: cosmosServer.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
+			{Name: "evm", URL: evmServer.URL, Type: NodeTypeEVM, ChainType: "test-evm", Weight: 100},
 		}, logger)
 
 		upstreams, err := upstream.GetUpstreams(&http.Request{})
@@ -319,7 +319,7 @@ func TestDynamicUpstreamAdvanced(t *testing.T) {
 		defer failingServer.Close()
 
 		upstream := createTestUpstream([]NodeConfig{
-			{Name: "failing", URL: failingServer.URL, Type: NodeTypeCosmos, Weight: 100},
+			{Name: "failing", URL: failingServer.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
 		}, logger)
 
 		// Set circuit breaker threshold
@@ -343,16 +343,17 @@ func TestDynamicUpstreamAdvanced(t *testing.T) {
 	})
 
 	t.Run("ConcurrentRequests_ConsistentUpstreams", func(t *testing.T) {
-		// Create multiple healthy servers
+		// Create multiple healthy servers with same block height to avoid validation issues
 		servers := make([]*httptest.Server, 3)
 		nodes := make([]NodeConfig, 3)
 		for i := 0; i < 3; i++ {
-			servers[i] = createCosmosServer(t, uint64(12345-i), false)
+			servers[i] = createCosmosServer(t, 12345, false) // Same block height for all nodes
 			nodes[i] = NodeConfig{
-				Name:   fmt.Sprintf("node-%d", i),
-				URL:    servers[i].URL,
-				Type:   NodeTypeCosmos,
-				Weight: 100,
+				Name:      fmt.Sprintf("node-%d", i),
+				URL:       servers[i].URL,
+				Type:      NodeTypeCosmos,
+				ChainType: "test-cosmos", // Add ChainType to ensure proper grouping
+				Weight:    100,
 			}
 		}
 		defer func() {
@@ -402,8 +403,8 @@ func TestDynamicUpstreamAdvanced(t *testing.T) {
 		defer unhealthyServer.Close()
 
 		upstream := createTestUpstream([]NodeConfig{
-			{Name: "healthy", URL: healthyServer.URL, Type: NodeTypeCosmos, Weight: 100},
-			{Name: "unhealthy", URL: unhealthyServer.URL, Type: NodeTypeCosmos, Weight: 100},
+			{Name: "healthy", URL: healthyServer.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
+			{Name: "unhealthy", URL: unhealthyServer.URL, Type: NodeTypeCosmos, ChainType: "test-cosmos", Weight: 100},
 		}, logger)
 
 		// Test health endpoint
