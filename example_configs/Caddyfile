@@ -81,7 +81,6 @@ ethereum.example.com {
             reverse_proxy {
                 dynamic blockchain_health {
                     evm_servers {$ETH_SERVERS}
-                    service_type "evm"
                     node_type "evm"
                     chain_type "ethereum"
                     check_interval "10s"
@@ -99,7 +98,6 @@ ethereum.example.com {
             handle @evm_websocket {
                 reverse_proxy {
                     dynamic blockchain_health {
-                        evm_servers {$ETH_SERVERS}
                         evm_ws_servers {$ETH_WS_SERVERS}
                         node_type "evm"
                         chain_type "ethereum"
@@ -131,7 +129,6 @@ base.example.com {
             reverse_proxy {
                 dynamic blockchain_health {
                     evm_servers {$BASE_SERVERS}
-                    service_type "evm"
                     node_type "evm"
                     chain_type "base"
                     check_interval "10s"
@@ -149,7 +146,6 @@ base.example.com {
             handle @base_websocket {
                 reverse_proxy {
                     dynamic blockchain_health {
-                        evm_servers {$BASE_SERVERS}
                         evm_ws_servers {$BASE_WS_SERVERS}
                         node_type "evm"
                         chain_type "base"
@@ -220,7 +216,6 @@ althea.example.com {
             reverse_proxy {
                 dynamic blockchain_health {
                     evm_servers {$ALTHEA_EVM_SERVERS}
-                    service_type "evm"
                     node_type "evm"
                     chain_type "althea-evm"
                     check_interval "10s"
@@ -238,7 +233,6 @@ althea.example.com {
             handle @evm_websocket {
                 reverse_proxy {
                     dynamic blockchain_health {
-                        evm_servers {$ALTHEA_EVM_SERVERS}
                         evm_ws_servers {$ALTHEA_EVM_WS_SERVERS}
                         node_type "evm"
                         chain_type "althea-evm"

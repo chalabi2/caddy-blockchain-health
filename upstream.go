@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/caddyserver/caddy/v2"
@@ -42,13 +43,14 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 		}
 	}
 
+	// Detect if this is a WebSocket upgrade request
+	isWebSocketRequest := b.isWebSocketUpgradeRequest(r)
+
 	var upstreams []*reverseproxy.Upstream
 	healthyCount := 0
 
 	for _, health := range healthResults {
 		if health.Healthy {
-			healthyCount++
-
 			// Find the corresponding node config for weight and service type
 			weight := 1
 			var nodeConfig *NodeConfig
@@ -59,6 +61,33 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 					break
 				}
 			}
+
+			// Filter nodes based on request type
+			if nodeConfig != nil {
+				serviceType := nodeConfig.Metadata["service_type"]
+
+				// For WebSocket requests, only include WebSocket nodes
+				if isWebSocketRequest {
+					if serviceType != "websocket" {
+						b.logger.Debug("Skipping non-WebSocket node for WebSocket request",
+							zap.String("node", health.Name),
+							zap.String("service_type", serviceType))
+						continue
+					}
+				} else {
+					// For HTTP requests, include RPC, API, and nodes without service_type (backward compatibility)
+					// but exclude WebSocket-only nodes
+					if serviceType == "websocket" {
+						b.logger.Debug("Skipping WebSocket node for HTTP request",
+							zap.String("node", health.Name),
+							zap.String("service_type", serviceType))
+						continue
+					}
+					// Allow: "rpc", "api", "evm", "", or any other non-websocket service type
+				}
+			}
+
+			healthyCount++
 
 			// Determine the correct URL to use for upstream
 			upstreamURL := health.URL
@@ -176,6 +205,36 @@ func (b *BlockchainHealthUpstream) getCachedHealthResults() []*NodeHealth {
 		zap.Int("cached_results", len(results)))
 
 	return results
+}
+
+// isWebSocketUpgradeRequest detects if the incoming request is a WebSocket upgrade request
+func (b *BlockchainHealthUpstream) isWebSocketUpgradeRequest(r *http.Request) bool {
+	// Check for WebSocket upgrade headers
+	connection := r.Header.Get("Connection")
+	upgrade := r.Header.Get("Upgrade")
+
+	// WebSocket upgrade requires both headers
+	isUpgrade := false
+	if connection != "" {
+		// Connection header can contain multiple values, check if "upgrade" is one of them
+		for _, conn := range strings.Split(strings.ToLower(connection), ",") {
+			if strings.TrimSpace(conn) == "upgrade" {
+				isUpgrade = true
+				break
+			}
+		}
+	}
+
+	isWebSocket := strings.ToLower(strings.TrimSpace(upgrade)) == "websocket"
+
+	result := isUpgrade && isWebSocket
+
+	b.logger.Debug("WebSocket upgrade detection",
+		zap.Bool("is_websocket_request", result),
+		zap.String("connection", connection),
+		zap.String("upgrade", upgrade))
+
+	return result
 }
 
 // provision sets up the module after configuration parsing
