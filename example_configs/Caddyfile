@@ -117,69 +117,6 @@ ethereum.example.com {
     }
 }
 
-base.example.com {
-    @base_websocket {
-        header Connection *Upgrade*
-        header Upgrade websocket
-    }
-
-    route {
-        handle /rpc/* {
-            uri strip_prefix /rpc
-            reverse_proxy {
-                dynamic blockchain_health {
-                    evm_servers {$BASE_SERVERS}
-                    node_type "evm"
-                    chain_type "base"
-                    check_interval "10s"
-                    timeout "10s"
-                    block_height_threshold 5
-                    min_healthy_nodes 1
-                    metrics_enabled true
-                    external_reference_threshold 0
-                }
-            }
-        }
-
-        handle /ws/* {
-            uri strip_prefix /ws
-            handle @base_websocket {
-                reverse_proxy {
-                    dynamic blockchain_health {
-                        evm_ws_servers {$BASE_WS_SERVERS}
-                        node_type "evm"
-                        chain_type "base"
-                        check_interval "5s"
-                        timeout "3s"
-                        block_height_threshold 10
-                        min_healthy_nodes 1
-                        metrics_enabled true
-                    }
-                    header_up Connection {http.request.header.Connection}
-                    header_up Upgrade {http.request.header.Upgrade}
-                    header_up X-Forwarded-For {remote_ip}
-                    header_up X-Real-IP {remote_ip}
-                }
-            }
-        }
-    }
-}
-
-arbitrum.example.com {
-    reverse_proxy {
-        dynamic blockchain_health {
-            evm_servers {$ARBITRUM_SERVERS}
-            node_type "evm"
-            chain_type "arbitrum"
-            check_interval "8s"
-            timeout "5s"
-            block_height_threshold 10
-            min_healthy_nodes 1
-            metrics_enabled true
-            external_reference_threshold 0
-        }
-    }
-}
 
 althea.example.com {
     @cosmos_websocket {
