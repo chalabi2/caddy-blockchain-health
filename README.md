@@ -334,9 +334,9 @@ export COSMOS_RPC_SERVERS="http://cosmos-node:26657"
 export COSMOS_API_SERVERS="http://cosmos-node:1317"
 ```
 
-- ✅ **Health checks RPC first, REST as fallback** - Tries RPC (`/status`), then REST (`/cosmos/base/tendermint/v1beta1/syncing`) if RPC fails
-- ✅ **Fallback redundancy** - Node stays available if either service responds
-- ✅ **Recommended for full-node infrastructure**
+- **Health checks RPC first, REST as fallback** - Tries RPC (`/status`), then REST (`/cosmos/base/tendermint/v1beta1/syncing`) if RPC fails
+- **Fallback redundancy** - Node stays available if either service responds
+- **Recommended for full-node infrastructure**
 
 **Scenario 2: Separated Services (Microservice Architecture)**
 
@@ -371,9 +371,9 @@ export COSMOS_RPC_SERVERS="http://cosmos-rpc-1:26657 http://cosmos-rpc-2:26657"
 export COSMOS_API_SERVERS="http://cosmos-api-1:1317 http://cosmos-api-2:1317"
 ```
 
-- ✅ **Health checks appropriate endpoint** - RPC or REST based on URL pattern
-- ✅ **No redundant checks** - Each service validates its specific protocol
-- ✅ **Recommended for microservice deployments**
+- **Health checks appropriate endpoint** - RPC or REST based on URL pattern
+- **No redundant checks** - Each service validates its specific protocol
+- **Recommended for microservice deployments**
 
 **Auto-Detection Logic:**
 
@@ -411,9 +411,9 @@ export COSMOS_API_SERVERS="http://cosmos-node:1317"
 export COSMOS_WS_SERVERS="ws://cosmos-node:26657/websocket"
 ```
 
-- ✅ **Tendermint WebSocket subscriptions** - Tests `tm.event = 'NewBlock'` subscriptions
-- ✅ **Real-time event streaming** - Validates connectivity for live event monitoring
-- ✅ **Auto scheme conversion** - Converts `http`/`https` to `ws`/`wss` automatically
+- **Tendermint WebSocket subscriptions** - Tests `tm.event = 'NewBlock'` subscriptions
+- **Real-time event streaming** - Validates connectivity for live event monitoring
+- **Auto scheme conversion** - Converts `http`/`https` to `ws`/`wss` automatically
 
 **EVM WebSocket Configuration:**
 
@@ -448,11 +448,11 @@ export BASE_SERVERS="http://95.216.38.96:13245 http://8.40.118.101:13245"
 export BASE_WS_SERVERS="ws://95.216.38.96:13246 ws://8.40.118.101:13246"
 ```
 
-- ✅ **Intelligent correlation** - Automatically correlates WebSocket and HTTP endpoints by hostname or index
-- ✅ **HTTP health checks** - Uses correlated HTTP endpoints for `eth_blockNumber` validation
-- ✅ **WebSocket proxy** - Routes WebSocket traffic to healthy WebSocket endpoints
-- ✅ **Block height validation** - Full blockchain health checking via HTTP while proxying to WebSocket
-- ✅ **Custom ports supported** - No assumptions about standard ports (8545/8546)
+- **Intelligent correlation** - Automatically correlates WebSocket and HTTP endpoints by hostname or index
+- **HTTP health checks** - Uses correlated HTTP endpoints for `eth_blockNumber` validation
+- **WebSocket proxy** - Routes WebSocket traffic to healthy WebSocket endpoints
+- **Block height validation** - Full blockchain health checking via HTTP while proxying to WebSocket
+- **Custom ports supported** - No assumptions about standard ports (8545/8546)
 
 **WebSocket Health Checking:**
 
@@ -490,9 +490,9 @@ Environment variables:
 export ETH_SERVERS="http://ethereum-node:8545"
 ```
 
-- ✅ **Single endpoint** - All requests use JSON-RPC over HTTP
-- ✅ **Health check via `eth_blockNumber`** - Validates node responsiveness and current block
-- ✅ **No separate API URL needed** - EVM protocol is unified
+- **Single endpoint** - All requests use JSON-RPC over HTTP
+- **Health check via `eth_blockNumber`** - Validates node responsiveness and current block
+- **No separate API URL needed** - EVM protocol is unified
 
 **EVM Service Types (by function, not protocol):**
 
@@ -627,12 +627,12 @@ osmosis.api.com {
 
 **Key Benefits:**
 
-- ✅ **No cross-chain interference** - Base nodes won't be marked unhealthy because Ethereum has higher block numbers
-- ✅ **Accurate health validation** - Each chain validates against its own network state
-- ✅ **Proper failover** - Only truly lagging nodes within the same chain are removed
-- ✅ **Multi-chain support** - Run multiple blockchain APIs with confidence
-- ✅ **Explicit configuration** - No hardcoded chain names, users specify both protocol and chain
-- ✅ **Backward compatibility** - Existing configurations continue to work
+- **No cross-chain interference** - Base nodes won't be marked unhealthy because Ethereum has higher block numbers
+- **Accurate health validation** - Each chain validates against its own network state
+- **Proper failover** - Only truly lagging nodes within the same chain are removed
+- **Multi-chain support** - Run multiple blockchain APIs with confidence
+- **Explicit configuration** - No hardcoded chain names, users specify both protocol and chain
+- **Backward compatibility** - Existing configurations continue to work
 
 ### Configuration Approaches
 
@@ -701,7 +701,7 @@ legacy.api.com {
 
 The plugin performs **internal pool validation** and **external reference monitoring**:
 
-##### **1. Internal Pool Comparison** ✅ **Affects Load Balancing**
+##### **1. Internal Pool Comparison** **Affects Load Balancing**
 
 Compares nodes within the same pool and **removes lagging nodes** from the load balancer:
 
@@ -1181,21 +1181,21 @@ api.example.com {
 
 **Benefits of Explicit Configuration Approach**:
 
-- ✅ **Clear separation of concerns** - Protocol type vs chain identifier
-- ✅ **No hardcoded chain names** - Support any blockchain without code changes
-- ✅ **Simplified configuration** - No manual node definitions needed
-- ✅ **Auto-discovery** - Automatic detection of service types
-- ✅ **Custom chain support** - Define your own L2s and testnets
-- ✅ **Environment integration** - Better CI/CD and deployment workflows
-- ✅ **Backward compatibility** - Legacy mode for existing configurations
+- **Clear separation of concerns** - Protocol type vs chain identifier
+- **No hardcoded chain names** - Support any blockchain without code changes
+- **Simplified configuration** - No manual node definitions needed
+- **Auto-discovery** - Automatic detection of service types
+- **Custom chain support** - Define your own L2s and testnets
+- **Environment integration** - Better CI/CD and deployment workflows
+- **Backward compatibility** - Legacy mode for existing configurations
 
 **Benefits of Blockchain-Aware Health Checks**:
 
-- ✅ **Protocol-specific validation** (sync status, block height)
-- ✅ **Intelligent failover** based on blockchain health
-- ✅ **External reference validation** against trusted sources
-- ✅ **Circuit breaker protection** for unhealthy nodes
-- ✅ **Comprehensive monitoring** with Prometheus metrics
+- **Protocol-specific validation** (sync status, block height)
+- **Intelligent failover** based on blockchain health
+- **External reference validation** against trusted sources
+- **Circuit breaker protection** for unhealthy nodes
+- **Comprehensive monitoring** with Prometheus metrics
 
 ## Troubleshooting
 
