@@ -417,6 +417,96 @@ func TestCaddyIntegration(t *testing.T) {
 	})
 }
 
+func TestBeacon_Caddyfile_ConfigThresholds(t *testing.T) {
+	// Two beacon nodes: one slightly behind within tolerance; one far behind beyond tolerance
+	healthyBeacon := createBeaconServer(t, 100000, false)
+	withinTolerance := createBeaconServer(t, 99980, false) // 20 slots behind
+	beyondTolerance := createBeaconServer(t, 99960, false) // 40 slots behind
+	defer healthyBeacon.Close()
+	defer withinTolerance.Close()
+	defer beyondTolerance.Close()
+
+	// Use height_threshold 32 (slots)
+	caddyfileContent := `
+    dynamic blockchain_health {
+        # nodes
+        node beacon-healthy {
+            url "` + healthyBeacon.URL + `"
+            type "beacon"
+            weight 100
+        }
+        node beacon-within {
+            url "` + withinTolerance.URL + `"
+            type "beacon"
+            weight 100
+        }
+        node beacon-beyond {
+            url "` + beyondTolerance.URL + `"
+            type "beacon"
+            weight 100
+        }
+
+        # health
+        check_interval "1s"
+        timeout "2s"
+        retry_attempts 1
+
+        # block validation
+        block_height_threshold 32
+
+        # failure handling
+        min_healthy_nodes 1
+    }`
+
+	dispenser := caddyfile.NewTestDispenser(caddyfileContent)
+	dispenser.Next()
+
+	module := &BlockchainHealthUpstream{}
+	if err := module.UnmarshalCaddyfile(dispenser); err != nil {
+		t.Fatalf("Failed to unmarshal Beacon Caddyfile: %v", err)
+	}
+
+	// Provision to initialize internals
+	ctx, cancel := caddy.NewContext(caddy.Context{Context: context.Background()})
+	defer cancel()
+	if err := module.Provision(ctx); err != nil {
+		t.Fatalf("Provision failed: %v", err)
+	}
+	defer func() { _ = module.Cleanup() }()
+
+	// Give initial checks a moment
+	time.Sleep(200 * time.Millisecond)
+
+	// Get upstreams; expect 2 (healthy + withinTolerance), exclude beyondTolerance
+	upstreams, err := module.GetUpstreams(&http.Request{})
+	if err != nil {
+		t.Fatalf("GetUpstreams failed: %v", err)
+	}
+
+	if len(upstreams) != 2 {
+		t.Fatalf("Expected 2 upstreams within threshold, got %d", len(upstreams))
+	}
+
+	hosts := map[string]bool{}
+	for _, up := range upstreams {
+		hosts[up.Dial] = true
+	}
+
+	healthyHost := extractCaddyTestHostFromURL(healthyBeacon.URL)
+	withinHost := extractCaddyTestHostFromURL(withinTolerance.URL)
+	beyondHost := extractCaddyTestHostFromURL(beyondTolerance.URL)
+
+	if !hosts[healthyHost] {
+		t.Errorf("Expected healthy beacon in upstreams")
+	}
+	if !hosts[withinHost] {
+		t.Errorf("Expected within-tolerance beacon in upstreams")
+	}
+	if hosts[beyondHost] {
+		t.Errorf("Did not expect beyond-tolerance beacon in upstreams")
+	}
+}
+
 // TestCaddyfileConfiguration tests various Caddyfile configuration patterns
 func TestCaddyfileConfiguration(t *testing.T) {
 	t.Run("CompleteConfiguration_ParsesCorrectly", func(t *testing.T) {

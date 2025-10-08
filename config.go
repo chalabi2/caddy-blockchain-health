@@ -196,8 +196,8 @@ func (b *BlockchainHealthUpstream) parseCaddyfile(d *caddyfile.Dispenser) error 
 					return d.ArgErr()
 				}
 				nodeType := d.Val()
-				if nodeType != "cosmos" && nodeType != "evm" {
-					return d.Errf("invalid node_type: %s (must be 'cosmos' or 'evm')", nodeType)
+				if nodeType != "cosmos" && nodeType != "evm" && nodeType != "beacon" {
+					return d.Errf("invalid node_type: %s (must be 'cosmos', 'evm', or 'beacon')", nodeType)
 				}
 				b.Chain.NodeType = nodeType
 
@@ -294,8 +294,8 @@ func (b *BlockchainHealthUpstream) parseNode(d *caddyfile.Dispenser) (NodeConfig
 				return node, d.ArgErr()
 			}
 			nodeType := d.Val()
-			if nodeType != "cosmos" && nodeType != "evm" {
-				return node, d.Errf("invalid node type: %s (must be 'cosmos' or 'evm')", nodeType)
+			if nodeType != "cosmos" && nodeType != "evm" && nodeType != "beacon" {
+				return node, d.Errf("invalid node type: %s (must be 'cosmos', 'evm', or 'beacon')", nodeType)
 			}
 			node.Type = NodeType(nodeType)
 
@@ -358,8 +358,8 @@ func (b *BlockchainHealthUpstream) parseExternalReference(d *caddyfile.Dispenser
 		return ref, d.ArgErr()
 	}
 	refType := d.Val()
-	if refType != "cosmos" && refType != "evm" {
-		return ref, d.Errf("invalid external reference type: %s (must be 'cosmos' or 'evm')", refType)
+	if refType != "cosmos" && refType != "evm" && refType != "beacon" {
+		return ref, d.Errf("invalid external reference type: %s (must be 'cosmos', 'evm', or 'beacon')", refType)
 	}
 	ref.Type = NodeType(refType)
 	ref.Enabled = true // default enabled
@@ -641,6 +641,9 @@ func (b *BlockchainHealthUpstream) mapChainTypeToProtocol(chainType string) stri
 	// EVM chains
 	case "evm", "ethereum", "base", "arbitrum", "polygon", "bsc", "avalanche", "optimism", "althea-evm":
 		return "evm"
+	// Beacon/Consensus clients
+	case "beacon", "ethereum-beacon", "prysm", "teku", "lighthouse", "nimbus":
+		return "beacon"
 	// Dual protocol chains (use the specific service type)
 	case "dual":
 		return "" // Let caller handle this case
@@ -649,6 +652,10 @@ func (b *BlockchainHealthUpstream) mapChainTypeToProtocol(chainType string) stri
 		if strings.Contains(strings.ToLower(chainType), "evm") ||
 			strings.Contains(strings.ToLower(chainType), "ethereum") {
 			return "evm"
+		}
+		if strings.Contains(strings.ToLower(chainType), "beacon") ||
+			strings.Contains(strings.ToLower(chainType), "prysm") {
+			return "beacon"
 		}
 		if strings.Contains(strings.ToLower(chainType), "cosmos") {
 			return "cosmos"

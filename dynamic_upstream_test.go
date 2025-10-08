@@ -468,6 +468,41 @@ func TestDynamicUpstreamAdvanced(t *testing.T) {
 	})
 }
 
+func TestBeaconNodes_HealthChecksAndUpstreams(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+
+	// Create Beacon servers (Prysm-like)
+	healthyBeacon := createBeaconServer(t, 123456, false)
+	unhealthyBeacon := createBeaconServer(t, 123400, true) // syncing
+	defer healthyBeacon.Close()
+	defer unhealthyBeacon.Close()
+
+	upstream := createTestUpstream([]NodeConfig{
+		{Name: "healthy-beacon", URL: healthyBeacon.URL, Type: NodeTypeBeacon, ChainType: "test-beacon", Weight: 100},
+		{Name: "unhealthy-beacon", URL: unhealthyBeacon.URL, Type: NodeTypeBeacon, ChainType: "test-beacon", Weight: 100},
+	}, logger)
+
+	// Lower threshold to be strict
+	upstream.config.BlockValidation.HeightThreshold = 2
+
+	upstreams, err := upstream.GetUpstreams(&http.Request{})
+	if err != nil {
+		t.Fatalf("GetUpstreams failed: %v", err)
+	}
+
+	// Should only return healthy beacon node
+	if len(upstreams) != 1 {
+		t.Errorf("Expected 1 upstream (healthy Beacon only), got %d", len(upstreams))
+	}
+
+	expectedHost := getDynamicTestHostFromURL(healthyBeacon.URL)
+	if upstreams[0].Dial != expectedHost {
+		t.Errorf("Expected upstream host %s, got %s", expectedHost, upstreams[0].Dial)
+	}
+
+	t.Logf("✅ Beacon nodes correctly validated and added to upstream pool")
+}
+
 // Helper functions for test setup
 
 func createTestUpstream(nodes []NodeConfig, logger *zap.Logger) *BlockchainHealthUpstream {
@@ -549,6 +584,31 @@ func createEVMServer(t *testing.T, blockHeight uint64, returnError bool) *httpte
 			}
 			_, _ = w.Write([]byte(response))
 		} else {
+			http.NotFound(w, r)
+		}
+	}))
+}
+
+func createBeaconServer(t *testing.T, headSlot uint64, isSyncing bool) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/eth/v1/node/syncing":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			// Include head_slot if not syncing; Prysm may include it; test both paths
+			var payload string
+			if isSyncing {
+				payload = `{"data": {"is_syncing": true, "head_slot": "` + fmt.Sprintf("%d", headSlot) + `"}}`
+			} else {
+				payload = `{"data": {"is_syncing": false, "head_slot": "` + fmt.Sprintf("%d", headSlot) + `"}}`
+			}
+			_, _ = w.Write([]byte(payload))
+		case "/eth/v1/beacon/headers/head":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			response := `{"data":{"header":{"message":{"slot":"` + fmt.Sprintf("%d", headSlot) + `"}}}}`
+			_, _ = w.Write([]byte(response))
+		default:
 			http.NotFound(w, r)
 		}
 	}))

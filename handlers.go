@@ -578,3 +578,158 @@ func (e *EVMHandler) GetBlockHeight(ctx context.Context, url string) (uint64, er
 
 	return height, nil
 }
+
+// BeaconHandler handles health checks for Ethereum Beacon (consensus) nodes
+type BeaconHandler struct {
+	client *http.Client
+	logger *zap.Logger
+}
+
+// NewBeaconHandler creates a new Beacon protocol handler
+func NewBeaconHandler(timeout time.Duration, logger *zap.Logger) *BeaconHandler {
+	return &BeaconHandler{
+		client: &http.Client{Timeout: timeout},
+		logger: logger,
+	}
+}
+
+// beaconSyncingResponse represents /eth/v1/node/syncing response
+type beaconSyncingResponse struct {
+	Data struct {
+		IsSyncing bool   `json:"is_syncing"`
+		HeadSlot  string `json:"head_slot"`
+	} `json:"data"`
+}
+
+// beaconHeaderResponse represents /eth/v1/beacon/headers/head response
+type beaconHeaderResponse struct {
+	Data struct {
+		Header struct {
+			Message struct {
+				Slot string `json:"slot"`
+			} `json:"message"`
+		} `json:"header"`
+	} `json:"data"`
+}
+
+// CheckHealth implements ProtocolHandler for Beacon nodes
+func (b *BeaconHandler) CheckHealth(ctx context.Context, node NodeConfig) (*NodeHealth, error) {
+	start := time.Now()
+	health := &NodeHealth{
+		Name:      node.Name,
+		URL:       node.URL,
+		Healthy:   false,
+		LastCheck: time.Now(),
+	}
+
+	b.logger.Debug("starting Beacon health check",
+		zap.String("node", node.Name),
+		zap.String("url", node.URL),
+		zap.String("type", string(node.Type)))
+
+	// Prysm exposes /eth/v1/node/syncing; use it to determine syncing state and head slot if present
+	syncingURL := fmt.Sprintf("%s/eth/v1/node/syncing", strings.TrimSuffix(node.URL, "/"))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, syncingURL, nil)
+	if err != nil {
+		health.LastError = fmt.Errorf("creating syncing request: %w", err).Error()
+		health.ResponseTime = time.Since(start)
+		return health, nil
+	}
+
+	resp, err := b.client.Do(req)
+	if err != nil {
+		b.logger.Debug("Beacon syncing request failed", zap.String("url", syncingURL), zap.Error(err))
+		health.LastError = fmt.Errorf("syncing request failed: %w", err).Error()
+		health.ResponseTime = time.Since(start)
+		return health, nil
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			b.logger.Debug("Failed to close response body", zap.Error(err))
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		health.LastError = fmt.Errorf("syncing status %d", resp.StatusCode).Error()
+		health.ResponseTime = time.Since(start)
+		return health, nil
+	}
+
+	var syncResp beaconSyncingResponse
+	if err := json.NewDecoder(resp.Body).Decode(&syncResp); err != nil {
+		b.logger.Debug("failed to decode Beacon syncing response", zap.String("url", syncingURL), zap.Error(err))
+		health.LastError = fmt.Errorf("decoding syncing response: %w", err).Error()
+		health.ResponseTime = time.Since(start)
+		return health, nil
+	}
+
+	// Determine head slot. Some clients provide it here; otherwise fetch header
+	var headSlot uint64
+	if syncResp.Data.HeadSlot != "" {
+		if slotParsed, err := strconv.ParseUint(syncResp.Data.HeadSlot, 10, 64); err == nil {
+			headSlot = slotParsed
+		}
+	}
+
+	if headSlot == 0 {
+		// Fallback: fetch head header for slot number
+		slot, err := b.getHeadSlot(ctx, node.URL)
+		if err != nil {
+			health.LastError = err.Error()
+			health.ResponseTime = time.Since(start)
+			return health, nil
+		}
+		headSlot = slot
+	}
+
+	// Healthy if not syncing and we have a valid head slot
+	catchingUp := syncResp.Data.IsSyncing
+	health.BlockHeight = headSlot
+	health.CatchingUp = &catchingUp
+	health.Healthy = !catchingUp && headSlot > 0
+	health.ResponseTime = time.Since(start)
+
+	return health, nil
+}
+
+// GetBlockHeight implements ProtocolHandler for Beacon nodes (returns head slot)
+func (b *BeaconHandler) GetBlockHeight(ctx context.Context, baseURL string) (uint64, error) {
+	return b.getHeadSlot(ctx, baseURL)
+}
+
+func (b *BeaconHandler) getHeadSlot(ctx context.Context, baseURL string) (uint64, error) {
+	headersURL := fmt.Sprintf("%s/eth/v1/beacon/headers/head", strings.TrimSuffix(baseURL, "/"))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, headersURL, nil)
+	if err != nil {
+		return 0, fmt.Errorf("creating headers request: %w", err)
+	}
+
+	resp, err := b.client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("headers request failed: %w", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			b.logger.Debug("Failed to close response body", zap.Error(err))
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("headers status %d", resp.StatusCode)
+	}
+
+	var hdr beaconHeaderResponse
+	if err := json.NewDecoder(resp.Body).Decode(&hdr); err != nil {
+		return 0, fmt.Errorf("decoding headers response: %w", err)
+	}
+
+	slotStr := hdr.Data.Header.Message.Slot
+	if slotStr == "" {
+		return 0, fmt.Errorf("empty head slot in headers response")
+	}
+	slot, err := strconv.ParseUint(slotStr, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parsing head slot: %w", err)
+	}
+	return slot, nil
+}

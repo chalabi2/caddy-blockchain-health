@@ -15,6 +15,7 @@ type NodeType string
 const (
 	NodeTypeCosmos NodeType = "cosmos"
 	NodeTypeEVM    NodeType = "evm"
+	NodeTypeBeacon NodeType = "beacon"
 )
 
 // NodeConfig represents the configuration for a blockchain node
@@ -188,6 +189,7 @@ type HealthChecker struct {
 	config        *Config
 	cosmosHandler ProtocolHandler
 	evmHandler    ProtocolHandler
+	beaconHandler ProtocolHandler
 	cache         *HealthCache
 	metrics       *Metrics
 	logger        *zap.Logger

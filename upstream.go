@@ -242,7 +242,17 @@ func (b *BlockchainHealthUpstream) provision(ctx caddy.Context) error {
 	// Set up logger
 	b.logger = ctx.Logger()
 
-	// Convert parsed config to internal config structure
+	// If an existing config is already present (e.g., tests), preserve its nodes
+	if b.config != nil {
+		if len(b.Nodes) == 0 && len(b.config.Nodes) > 0 {
+			b.Nodes = b.config.Nodes
+		}
+		if len(b.ExternalReferences) == 0 && len(b.config.ExternalReferences) > 0 {
+			b.ExternalReferences = b.config.ExternalReferences
+		}
+	}
+
+	// Convert parsed config to internal config structure (or refresh from current fields)
 	b.config = &Config{
 		Nodes:              b.Nodes,
 		ExternalReferences: b.ExternalReferences,
@@ -343,7 +353,7 @@ func (b *BlockchainHealthUpstream) validate() error {
 		if node.URL == "" {
 			return fmt.Errorf("node %s: URL is required", node.Name)
 		}
-		if node.Type != NodeTypeCosmos && node.Type != NodeTypeEVM {
+		if node.Type != NodeTypeCosmos && node.Type != NodeTypeEVM && node.Type != NodeTypeBeacon {
 			return fmt.Errorf("node %s: invalid type %s", node.Name, node.Type)
 		}
 		if node.Weight <= 0 {
@@ -371,7 +381,7 @@ func (b *BlockchainHealthUpstream) validate() error {
 		if ref.URL == "" {
 			return fmt.Errorf("external reference %s: URL is required", ref.Name)
 		}
-		if ref.Type != NodeTypeCosmos && ref.Type != NodeTypeEVM {
+		if ref.Type != NodeTypeCosmos && ref.Type != NodeTypeEVM && ref.Type != NodeTypeBeacon {
 			return fmt.Errorf("external reference %s: invalid type %s", ref.Name, ref.Type)
 		}
 

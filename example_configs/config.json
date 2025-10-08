@@ -101,6 +101,57 @@
             {
               "match": [
                 {
+                  "host": ["beacon.example.com"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "subroute",
+                  "routes": [
+                    {
+                      "match": [
+                        {
+                          "path": ["/beacon/*"]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "dynamic_upstreams": {
+                            "source": "blockchain_health",
+                            "environment": {
+                              "servers": "http://beacon-1:3500 http://beacon-2:3500"
+                            },
+                            "chain": {
+                              "node_type": "beacon",
+                              "chain_type": "ethereum-beacon"
+                            },
+                            "health_check": {
+                              "interval": "10s",
+                              "timeout": "10s"
+                            },
+                            "block_validation": {
+                              "height_threshold": 32,
+                              "external_reference_threshold": 0
+                            },
+                            "failure_handling": {
+                              "min_healthy_nodes": 1
+                            },
+                            "monitoring": {
+                              "metrics_enabled": true
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            },
+            {
+              "match": [
+                {
                   "host": ["ethereum.example.com"]
                 }
               ],

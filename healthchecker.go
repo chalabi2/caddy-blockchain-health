@@ -24,6 +24,7 @@ func NewHealthChecker(config *Config, cache *HealthCache, metrics *Metrics, logg
 		config:          config,
 		cosmosHandler:   NewCosmosHandler(timeout, logger),
 		evmHandler:      NewEVMHandler(timeout, logger),
+		beaconHandler:   NewBeaconHandler(timeout, logger),
 		cache:           cache,
 		metrics:         metrics,
 		logger:          logger,
@@ -167,6 +168,8 @@ func (h *HealthChecker) checkWithRetry(ctx context.Context, node NodeConfig) *No
 			health, err = h.cosmosHandler.CheckHealth(ctx, node)
 		case NodeTypeEVM:
 			health, err = h.evmHandler.CheckHealth(ctx, node)
+		case NodeTypeBeacon:
+			health, err = h.beaconHandler.CheckHealth(ctx, node)
 		default:
 			return &NodeHealth{
 				Name:      node.Name,
@@ -335,6 +338,8 @@ func (h *HealthChecker) validateAgainstExternal(nodes []*NodeHealth, ref Externa
 		externalHeight, err = h.cosmosHandler.GetBlockHeight(ctx, ref.URL)
 	case NodeTypeEVM:
 		externalHeight, err = h.evmHandler.GetBlockHeight(ctx, ref.URL)
+	case NodeTypeBeacon:
+		externalHeight, err = h.beaconHandler.GetBlockHeight(ctx, ref.URL)
 	default:
 		return fmt.Errorf("unsupported external reference type: %s", ref.Type)
 	}

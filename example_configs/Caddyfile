@@ -118,6 +118,27 @@ ethereum.example.com {
 }
 
 
+beacon.example.com {
+    route {
+        handle /beacon/* {
+            uri strip_prefix /beacon
+            reverse_proxy {
+                dynamic blockchain_health {
+                    servers {$BEACON_SERVERS}
+                    node_type "beacon"
+                    chain_type "ethereum-beacon"
+                    check_interval "10s"
+                    timeout "10s"
+                    block_height_threshold 32
+                    min_healthy_nodes 1
+                    metrics_enabled true
+                    external_reference_threshold 0
+                }
+            }
+        }
+    }
+}
+
 althea.example.com {
     @cosmos_websocket {
         header Connection *Upgrade*
