@@ -11,33 +11,34 @@ A Caddy dynamic upstream module that intelligently monitors blockchain node heal
 
 ## Features
 
-### 🔗 **Multi-Protocol Support**
+### Multi-Protocol Support
 
-- **Cosmos SDK chains** - RPC (`/status`) and REST API (`/cosmos/base/tendermint/v1beta1/syncing`) health checks
-- **EVM chains** - JSON-RPC (`eth_blockNumber`) validation
-- **Flexible endpoints** - Support for separated RPC/REST services or combined nodes
-- **Block height comparison** - Within pools and against external references
+- Cosmos SDK chains - RPC (`/status`) and REST API (`/cosmos/base/tendermint/v1beta1/syncing`) health checks
+- EVM chains - JSON-RPC (`eth_blockNumber`) validation
+- Beacon (Ethereum consensus) - REST (`/eth/v1/node/syncing`, `/eth/v1/beacon/headers/head`) validation
+- Flexible endpoints - Support for separated RPC/REST services or combined nodes
+- Block height comparison - Within pools and against external references
 
-### 🏥 **Intelligent Health Checking**
+### Intelligent Health Checking
 
-- **Sync status monitoring** - Detects `catching_up` state for Cosmos nodes
-- **Real-time validation** - Immediate unhealthy node removal from pools
-- **External references** - Validate against trusted providers (Infura, Alchemy, public nodes)
-- **Concurrent checks** - Parallel health validation with configurable limits
+- Sync status monitoring - Detects `catching_up` state for Cosmos nodes and `is_syncing` for Beacon nodes
+- Real-time validation - Immediate unhealthy node removal from pools
+- External references - Validate against trusted providers
+- Concurrent checks - Parallel health validation with configurable limits
 
-### 🛡️ **Production-Ready Resilience**
+### Production-Ready Resilience
 
-- **Circuit breaker pattern** - Prevents overwhelming unhealthy nodes
-- **Graceful degradation** - Minimum healthy node enforcement
-- **Retry logic** - Exponential backoff with jitter
-- **TTL-based caching** - Optimized performance with configurable duration
+- Circuit breaker pattern - Prevents overwhelming unhealthy nodes
+- Graceful degradation - Minimum healthy node enforcement
+- Retry logic - Exponential backoff with jitter
+- TTL-based caching - Optimized performance with configurable duration
 
-### 📊 **Monitoring & Observability**
+### Monitoring & Observability
 
-- **Prometheus metrics** - Comprehensive monitoring with node-level granularity
-- **Health endpoint** - Real-time status API with detailed diagnostics
-- **Structured logging** - Configurable log levels with request tracing
-- **Performance tracking** - Response times and error rates
+- Prometheus metrics - Comprehensive monitoring with node-level granularity
+- Health endpoint - Real-time status API with detailed diagnostics
+- Structured logging - Configurable log levels with request tracing
+- Performance tracking - Response times and error rates
 
 ## Installation
 
@@ -66,7 +67,7 @@ Or add to your xcaddy.json:
 
 Basic Caddyfile configuration using environment variables:
 
-```caddy
+````caddy
 {
     admin localhost:2019
 }
@@ -93,28 +94,56 @@ blockchain-api.example.com {
 }
 
 # Ethereum configuration
-ethereum-api.example.com {
+### Beacon (Ethereum Consensus) Example
+
+```caddy
+beacon.example.com {
     reverse_proxy {
         dynamic blockchain_health {
-            # Explicit configuration (recommended)
-            evm_servers {$ETH_SERVERS}
-            node_type "evm"        # ← Protocol type (health checker)
-            chain_type "ethereum"  # ← Chain identifier (grouping)
+            servers {$BEACON_SERVERS}
+            node_type "beacon"
+            chain_type "ethereum-beacon"
+
+            # Recommended production tolerance
+            block_height_threshold 32
+            check_interval "10s"
+            timeout "10s"
+            min_healthy_nodes 1
+            metrics_enabled true
+        }
+    }
+}
+````
+
+Environment variables:
+
+```bash
+export BEACON_SERVERS="http://beacon-1:3500 http://beacon-2:3500"
+```
+
+ethereum-api.example.com {
+reverse_proxy {
+dynamic blockchain_health { # Explicit configuration (recommended)
+evm_servers {$ETH_SERVERS}
+node_type "evm" # ← Protocol type (health checker)
+chain_type "ethereum" # ← Chain identifier (grouping)
 
             # Production settings
             min_healthy_nodes 1
             metrics_enabled true
         }
     }
+
 }
-```
+
+````
 
 Set your environment variables:
 
 ```bash
 export COSMOS_SERVERS="http://cosmos-1:26657 http://cosmos-2:26657 http://cosmos-3:26657"
 export ETH_SERVERS="http://eth-1:8545 http://eth-2:8545"
-```
+````
 
 ## Configuration
 
@@ -235,19 +264,19 @@ Environment variables:
 export DEV_SERVERS="http://localhost:26657 http://localhost:1317 http://localhost:8545"
 ```
 
-### ⚠️ **Important: Service Separation Behavior**
+### Important: Service Separation Behavior
 
-**Pattern 1 (Multi-Chain)**: ✅ **Full health validation** - Checks all configured endpoints with comprehensive monitoring.
+**Pattern 1 (Multi-Chain)**: Full health validation - Checks all configured endpoints with comprehensive monitoring.
 
-**Pattern 2 (Separated Services)**: ✅ **Service-specific validation** - Only checks the specific service type (RPC or REST) without redundant checks.
+**Pattern 2 (Separated Services)**: Service-specific validation - Only checks the specific service type (RPC or REST) without redundant checks.
 
-**Pattern 3 (Development)**: ✅ **Relaxed validation** - Lenient settings suitable for local development and testing.
+**Pattern 3 (Development)**: Relaxed validation - Lenient settings suitable for local development and testing.
 
 **Recommendation**: Use Pattern 1 for production APIs requiring maximum reliability, Pattern 2 for microservice architectures, and Pattern 3 for development environments.
 
 ### Configuration Options
 
-#### 🌟 **Environment Variable Configuration** (Recommended)
+#### Environment Variable Configuration (Recommended)
 
 The plugin now supports simplified environment variable-based configuration:
 
@@ -269,15 +298,15 @@ The plugin now supports simplified environment variable-based configuration:
 
 | Option          | Description                                             | Default | Required |
 | --------------- | ------------------------------------------------------- | ------- | -------- |
-| `name`          | Unique identifier for the node                          | -       | ✅       |
-| `url`           | Primary endpoint URL (RPC for Cosmos, JSON-RPC for EVM) | -       | ✅       |
-| `api_url`       | Optional REST API URL for Cosmos nodes                  | -       | ❌       |
-| `websocket_url` | Optional WebSocket URL for real-time connections        | -       | ❌       |
-| `type`          | Node type (`cosmos` or `evm`)                           | -       | ✅       |
-| `weight`        | Load balancing weight                                   | `100`   | ❌       |
-| `metadata`      | Optional key-value metadata                             | `{}`    | ❌       |
+| `name`          | Unique identifier for the node                          | -       | yes      |
+| `url`           | Primary endpoint URL (RPC for Cosmos, JSON-RPC for EVM) | -       | yes      |
+| `api_url`       | Optional REST API URL for Cosmos nodes                  | -       | no       |
+| `websocket_url` | Optional WebSocket URL for real-time connections        | -       | no       |
+| `type`          | Node type (`cosmos` or `evm`)                           | -       | yes      |
+| `weight`        | Load balancing weight                                   | `100`   | no       |
+| `metadata`      | Optional key-value metadata                             | `{}`    | no       |
 
-#### 🔍 **Cosmos RPC vs REST API Differentiation**
+#### Cosmos RPC vs REST API Differentiation
 
 The plugin intelligently handles Cosmos SDK chains with separate RPC and REST endpoints:
 
@@ -352,7 +381,7 @@ export COSMOS_API_SERVERS="http://cosmos-api-1:1317 http://cosmos-api-2:1317"
 - **Port 1317** or `/cosmos/` path → REST API health check
 - **Both `url` and `api_url` specified** → Checks both endpoints
 
-#### 🌐 **WebSocket Support**
+#### WebSocket Support
 
 The plugin provides comprehensive WebSocket support for real-time blockchain connections:
 
@@ -433,7 +462,7 @@ export BASE_WS_SERVERS="ws://95.216.38.96:13246 ws://8.40.118.101:13246"
 - **Timeout protection** - 3-second read timeout prevents hanging connections
 - **Protocol-specific tests** - Uses appropriate subscription methods per blockchain type
 
-#### 🔗 **EVM JSON-RPC Node Differentiation**
+#### EVM JSON-RPC Node Differentiation
 
 EVM nodes use JSON-RPC protocol and don't have separate RPC/REST endpoints like Cosmos:
 
@@ -493,15 +522,15 @@ export ETH_LIGHT_SERVERS="http://light-node:8545"
 
 **Key Differences from Cosmos:**
 
-| Aspect              | Cosmos SDK                                            | EVM Chains                     |
-| ------------------- | ----------------------------------------------------- | ------------------------------ |
-| **Protocol**        | RPC (26657) + REST (1317)                             | JSON-RPC (8545)                |
-| **Health Check**    | `/status` + `/cosmos/base/tendermint/v1beta1/syncing` | `eth_blockNumber`              |
-| **Endpoints**       | Separate RPC/REST URLs possible                       | Single JSON-RPC endpoint       |
-| **Sync Status**     | `catching_up` boolean                                 | Block height comparison        |
-| **Differentiation** | Service type (RPC vs REST)                            | Node type (archive/full/light) |
+| Aspect          | Cosmos SDK                                            | EVM Chains                     |
+| --------------- | ----------------------------------------------------- | ------------------------------ |
+| Protocol        | RPC (26657) + REST (1317)                             | JSON-RPC (8545)                |
+| Health Check    | `/status` + `/cosmos/base/tendermint/v1beta1/syncing` | `eth_blockNumber`              |
+| Endpoints       | Separate RPC/REST URLs possible                       | Single JSON-RPC endpoint       |
+| Sync Status     | `catching_up` boolean                                 | Block height comparison        |
+| Differentiation | Service type (RPC vs REST)                            | Node type (archive/full/light) |
 
-#### 🔗 **Chain-Specific Grouping** ✨ **New Feature**
+#### Chain-Specific Grouping
 
 **Problem Solved**: Previously, all EVM chains (Ethereum, Base, Arbitrum, etc.) were compared against each other, causing nodes to be incorrectly marked as unhealthy due to vastly different block heights across chains.
 
@@ -510,7 +539,7 @@ export ETH_LIGHT_SERVERS="http://light-node:8545"
 - **`node_type`**: Determines which health checker to use (`cosmos` or `evm`)
 - **`chain_type`**: Groups nodes for block height validation (e.g., `ethereum`, `base`, `akash`)
 
-**Before (❌ Cross-Chain Comparison)**:
+**Before (Cross-Chain Comparison)**:
 
 ```
 All EVM nodes grouped together:
@@ -520,7 +549,7 @@ All EVM nodes grouped together:
 → Base and Arbitrum marked unhealthy (millions of blocks "behind" Ethereum)
 ```
 
-**After (✅ Chain-Specific Isolation)**:
+**After (Chain-Specific Isolation)**:
 
 ```
 Each chain has its own validation pool:
@@ -605,7 +634,7 @@ osmosis.api.com {
 - ✅ **Explicit configuration** - No hardcoded chain names, users specify both protocol and chain
 - ✅ **Backward compatibility** - Existing configurations continue to work
 
-### **Configuration Approaches**
+### Configuration Approaches
 
 #### **Recommended: Explicit Configuration**
 
@@ -668,7 +697,7 @@ legacy.api.com {
 - Known EVM chains: `ethereum`, `base`, `arbitrum`, `polygon`, etc. → `node_type "evm"`
 - Unknown chains: Falls back to URL-based detection
 
-#### 📊 **Block Height Validation Strategy**
+#### Block Height Validation Strategy
 
 The plugin performs **internal pool validation** and **external reference monitoring**:
 
@@ -872,17 +901,17 @@ Final Result: Only eth-node-1 and eth-node-2 receive traffic (based on internal 
 
 | Option           | Description                                | Default | Required |
 | ---------------- | ------------------------------------------ | ------- | -------- |
-| `check_interval` | How often to check node health             | `15s`   | ❌       |
-| `timeout`        | Request timeout for health checks          | `5s`    | ❌       |
-| `retry_attempts` | Number of retry attempts for failed checks | `3`     | ❌       |
-| `retry_delay`    | Delay between retry attempts               | `1s`    | ❌       |
+| `check_interval` | How often to check node health             | `15s`   | no       |
+| `timeout`        | Request timeout for health checks          | `5s`    | no       |
+| `retry_attempts` | Number of retry attempts for failed checks | `3`     | no       |
+| `retry_delay`    | Delay between retry attempts               | `1s`    | no       |
 
 #### Block Validation Settings
 
 | Option                         | Description                              | Default | Required |
 | ------------------------------ | ---------------------------------------- | ------- | -------- |
-| `block_height_threshold`       | Maximum blocks behind pool leader        | `5`     | ❌       |
-| `external_reference_threshold` | Maximum blocks behind external reference | `10`    | ❌       |
+| `block_height_threshold`       | Maximum blocks behind pool leader        | `5`     | no       |
+| `external_reference_threshold` | Maximum blocks behind external reference | `10`    | no       |
 
 #### External References
 
@@ -890,10 +919,10 @@ Final Result: Only eth-node-1 and eth-node-2 receive traffic (based on internal 
 
 | Option    | Description                                              | Default | Required |
 | --------- | -------------------------------------------------------- | ------- | -------- |
-| `<type>`  | Reference type (`cosmos` or `evm`) specified as argument | -       | ✅       |
-| `name`    | Reference identifier                                     | -       | ✅       |
-| `url`     | External endpoint URL                                    | -       | ✅       |
-| `enabled` | Enable this reference                                    | `true`  | ❌       |
+| `<type>`  | Reference type (`cosmos` or `evm`) specified as argument | -       | yes      |
+| `name`    | Reference identifier                                     | -       | yes      |
+| `url`     | External endpoint URL                                    | -       | yes      |
+| `enabled` | Enable this reference                                    | `true`  | no       |
 
 **Example**:
 
@@ -909,24 +938,24 @@ external_reference cosmos {
 
 | Option                  | Description                      | Default | Required |
 | ----------------------- | -------------------------------- | ------- | -------- |
-| `cache_duration`        | How long to cache health results | `30s`   | ❌       |
-| `max_concurrent_checks` | Maximum concurrent health checks | `10`    | ❌       |
+| `cache_duration`        | How long to cache health results | `30s`   | no       |
+| `max_concurrent_checks` | Maximum concurrent health checks | `10`    | no       |
 
 #### Failure Handling
 
 | Option                      | Description                           | Default | Required |
 | --------------------------- | ------------------------------------- | ------- | -------- |
-| `min_healthy_nodes`         | Minimum healthy nodes required        | `1`     | ❌       |
-| `grace_period`              | How long to keep unhealthy nodes      | `60s`   | ❌       |
-| `circuit_breaker_threshold` | Failure ratio to open circuit breaker | `0.8`   | ❌       |
+| `min_healthy_nodes`         | Minimum healthy nodes required        | `1`     | no       |
+| `grace_period`              | How long to keep unhealthy nodes      | `60s`   | no       |
+| `circuit_breaker_threshold` | Failure ratio to open circuit breaker | `0.8`   | no       |
 
 #### Monitoring Settings
 
 | Option            | Description                              | Default   | Required |
 | ----------------- | ---------------------------------------- | --------- | -------- |
-| `metrics_enabled` | Enable Prometheus metrics                | `false`   | ❌       |
-| `log_level`       | Logging level (debug, info, warn, error) | `info`    | ❌       |
-| `health_endpoint` | HTTP endpoint for health status          | `/health` | ❌       |
+| `metrics_enabled` | Enable Prometheus metrics                | `false`   | no       |
+| `log_level`       | Logging level (debug, info, warn, error) | `info`    | no       |
+| `health_endpoint` | HTTP endpoint for health status          | `/health` | no       |
 
 ### Protocol Validation
 
@@ -1182,7 +1211,7 @@ If you're experiencing WebSocket connection failures (e.g., "Received unexpected
 handle @websocket {
     reverse_proxy {
         dynamic blockchain_health {
-            # ✅ CORRECT: Specify both HTTP and WebSocket servers
+            # CORRECT: Specify both HTTP and WebSocket servers
             evm_servers {$BASE_SERVERS}        # HTTP for health checks
             evm_ws_servers {$BASE_WS_SERVERS}  # WebSocket for proxy
             chain_type "evm"
@@ -1192,7 +1221,7 @@ handle @websocket {
 ```
 
 ```bash
-# ✅ CORRECT: Correlated by hostname/index
+# CORRECT: Correlated by hostname/index
 export BASE_SERVERS="http://node1:8545 http://node2:8545"
 export BASE_WS_SERVERS="ws://node1:8546 ws://node2:8546"
 ```
@@ -1200,20 +1229,20 @@ export BASE_WS_SERVERS="ws://node1:8546 ws://node2:8546"
 **Common Mistakes:**
 
 ```caddy
-# ❌ WRONG: Only WebSocket servers specified
+# WRONG: Only WebSocket servers specified
 dynamic blockchain_health {
     evm_ws_servers {$BASE_WS_SERVERS}  # Missing HTTP servers for health checks
     chain_type "evm"
 }
 
-# ❌ WRONG: Old service_type approach (deprecated)
+# WRONG: Old service_type approach (deprecated)
 dynamic blockchain_health {
     evm_ws_servers {$BASE_WS_SERVERS}
-    service_type "evm_websocket"  # ❌ No longer needed - causes issues
+    service_type "evm_websocket"  # No longer needed - causes issues
     chain_type "evm"
 }
 
-# ❌ WRONG: Mismatched server counts
+# WRONG: Mismatched server counts
 # BASE_SERVERS="http://node1:8545 http://node2:8545"        # 2 servers
 # BASE_WS_SERVERS="ws://node1:8546"                         # 1 server - can't correlate
 ```
