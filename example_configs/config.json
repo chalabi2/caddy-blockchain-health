@@ -1,7 +1,4 @@
 {
-  "_comment": "Blockchain Health Dynamic Upstream - Chain-Specific Configuration",
-  "_description": "This example demonstrates explicit node_type and chain_type configuration for proper chain isolation",
-  "_note": "node_type determines health checker (cosmos/evm), chain_type determines grouping (ethereum/base/akash/etc)",
   "admin": {
     "listen": "localhost:2019"
   },
