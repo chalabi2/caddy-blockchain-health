@@ -369,7 +369,7 @@ func TestDynamicUpstreamAdvanced(t *testing.T) {
 		if err := upstream.provision(caddy.Context{}); err != nil {
 			t.Fatalf("Failed to provision upstream: %v", err)
 		}
-		defer upstream.cleanup()
+		defer func() { _ = upstream.cleanup() }()
 
 		// Wait longer for initial health checks to complete and cache to be populated
 		// This ensures all nodes are properly cached before concurrent testing
