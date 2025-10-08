@@ -67,6 +67,7 @@ jobs:
           DEV_API_SERVERS: "http://localhost:1317"
           PROD_COSMOS_RPC: "http://prod-rpc-1:26657 http://prod-rpc-2:26657 http://prod-rpc-3:26657"
           PROD_COSMOS_API: "http://prod-api-1:1317 http://prod-api-2:1317 http://prod-api-3:1317"
+          BEACON_SERVERS: "http://beacon-1:3500 http://beacon-2:3500"
 
       - name: Validate example JSON config
         run: ./caddy validate --config example_configs/config.json
