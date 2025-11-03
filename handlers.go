@@ -277,7 +277,7 @@ func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (ui
 		c.logger.Debug("REST block request failed",
 			zap.String("url", blockURL),
 			zap.Error(err))
-		return 0, false, fmt.Errorf("REST block status %d", resp.StatusCode)
+		return 0, false, fmt.Errorf("REST block request failed: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
