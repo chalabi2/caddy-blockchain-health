@@ -67,12 +67,26 @@ func (h *RequestDeadline) Provision(ctx caddy.Context) error {
 	return nil
 }
 
-// Validate checks min/max relation when provided
+// Validate checks configuration correctness, including min/max relation and source types
 func (h *RequestDeadline) Validate() error {
+	// Check min/max relation when both are provided
 	min := time.Duration(h.MinTimeout)
 	max := time.Duration(h.MaxTimeout)
 	if min > 0 && max > 0 && min > max {
 		return fmt.Errorf("min_timeout > max_timeout")
+	}
+
+	// Validate source types (allow empty type to be ignored)
+	for i, s := range h.Sources {
+		if s.Type == "" {
+			continue
+		}
+		switch s.Type {
+		case "placeholder", "header", "query":
+			// valid
+		default:
+			return fmt.Errorf("source[%d]: invalid type %q, must be placeholder, header, or query", i, s.Type)
+		}
 	}
 	return nil
 }
