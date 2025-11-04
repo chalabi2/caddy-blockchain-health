@@ -1,0 +1,44 @@
+{
+  "apps": {
+    "http": {
+      "servers": {
+        "srv0": {
+          "listen": [":8080"],
+          "routes": [
+            {
+              "handle": [
+                {
+                  "handler": "request_deadline",
+                  "from": [
+                    { "type": "placeholder", "value": "{http.auth.user.tier}" },
+                    { "type": "header", "name": "X-User-Tier" },
+                    { "type": "query", "name": "tier" }
+                  ],
+                  "default_timeout": "3s",
+                  "tiers": {
+                    "FREE": "500ms",
+                    "BASIC": "2s",
+                    "PREMIUM": "5s",
+                    "ENTERPRISE": "8s"
+                  },
+                  "skip": {
+                    "websocket": true,
+                    "grpc": true,
+                    "methods": ["OPTIONS"]
+                  },
+                  "add_headers": true,
+                  "min_timeout": "100ms",
+                  "max_timeout": "30s"
+                },
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [{ "dial": "127.0.0.1:9000" }]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

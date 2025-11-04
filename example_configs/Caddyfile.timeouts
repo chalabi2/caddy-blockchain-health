@@ -1,0 +1,98 @@
+# Example: Per-request timeouts + dynamic health checks
+
+{
+    admin localhost:2019
+}
+
+timeouts.example.com {
+    @ws {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+
+    route {
+        # Apply per-request deadlines before proxying
+        request_deadline {
+            from placeholder {http.auth.user.tier}
+            from header X-User-Tier
+            from query tier
+
+            default 3s
+            tiers {
+                FREE 500ms
+                BASIC 2s
+                PREMIUM 5s
+                ENTERPRISE 8s
+            }
+
+            skip {
+                websocket true
+                grpc true
+                methods OPTIONS
+            }
+
+            add_headers true
+            min_timeout 100ms
+            max_timeout 30s
+        }
+
+        handle /rpc/* {
+            uri strip_prefix /rpc
+
+            # WebSocket path honors skip logic above
+            handle @ws {
+                reverse_proxy {
+                    dynamic blockchain_health {
+                        rpc_servers {$COSMOS_RPC_SERVERS}
+                        service_type "websocket"
+                        node_type "cosmos"
+                        chain_type "cosmos-hub"
+                        check_interval "5s"
+                        timeout "3s"
+                        block_height_threshold 10
+                        min_healthy_nodes 1
+                        metrics_enabled true
+                    }
+                    header_up Connection {http.request.header.Connection}
+                    header_up Upgrade {http.request.header.Upgrade}
+                }
+            }
+
+            # HTTP RPC with dynamic health
+            reverse_proxy {
+                dynamic blockchain_health {
+                    rpc_servers {$COSMOS_RPC_SERVERS}
+                    service_type "rpc"
+                    node_type "cosmos"
+                    chain_type "cosmos-hub"
+                    check_interval "10s"
+                    timeout "10s"
+                    block_height_threshold 3
+                    min_healthy_nodes 2
+                    metrics_enabled true
+                    external_reference_threshold 0
+                }
+            }
+        }
+
+        handle /api/* {
+            uri strip_prefix /api
+            reverse_proxy {
+                dynamic blockchain_health {
+                    api_servers {$COSMOS_API_SERVERS}
+                    service_type "api"
+                    node_type "cosmos"
+                    chain_type "cosmos-hub"
+                    check_interval "10s"
+                    timeout "10s"
+                    block_height_threshold 3
+                    min_healthy_nodes 1
+                    metrics_enabled true
+                    external_reference_threshold 0
+                }
+            }
+        }
+    }
+}
+
+

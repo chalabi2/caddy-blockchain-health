@@ -126,6 +126,14 @@ example-start: xcaddy-build ## Start example configuration
 		echo "Caddy binary not found. Run 'make xcaddy-build' first."; \
 	fi
 
+example-start-timeouts: xcaddy-build ## Start timeouts example configuration
+	@echo "Starting timeouts example Caddy configuration..."
+	@if [ -f ./caddy ]; then \
+		./caddy run --config example_configs/Caddyfile.timeouts --adapter caddyfile; \
+	else \
+		echo "Caddy binary not found. Run 'make xcaddy-build' first."; \
+	fi
+
 example-stop: ## Stop running Caddy instance
 	@echo "Stopping Caddy..."
 	@pkill -f "caddy run" || echo "No Caddy process found"
@@ -135,8 +143,21 @@ example-restart: example-stop example-start ## Restart example configuration
 example-validate: ## Validate example configurations
 	@echo "Validating Caddyfile configuration..."
 	@if [ -f ./caddy ]; then \
+		COSMOS_RPC_SERVERS="http://cosmos-1:26657 http://cosmos-2:26657 http://cosmos-3:26657" \
+		COSMOS_API_SERVERS="http://api-1:1317 http://api-2:1317" \
+		ETH_SERVERS="http://eth-1:8545 http://eth-2:8545" \
+		ETH_WS_SERVERS="ws://eth-1:8546 ws://eth-2:8546" \
+		ALTHEA_RPC_SERVERS="http://althea-rpc-1:26657 http://althea-rpc-2:26657" \
+		ALTHEA_API_SERVERS="http://althea-api-1:1317 http://althea-api-2:1317" \
+		ALTHEA_EVM_SERVERS="http://althea-evm-1:8545 http://althea-evm-2:8545" \
+		ALTHEA_EVM_WS_SERVERS="ws://althea-evm-1:8546 ws://althea-evm-2:8546" \
+		DEV_RPC_SERVERS="http://localhost:26657" \
+		DEV_API_SERVERS="http://localhost:1317" \
+		BEACON_SERVERS="http://beacon-1:3500 http://beacon-2:3500" \
 		./caddy validate --config example_configs/Caddyfile --adapter caddyfile; \
-		./caddy validate --config example_configs/config.json --adapter json; \
+		./caddy validate --config example_configs/Caddyfile.timeouts --adapter caddyfile; \
+		./caddy validate --config example_configs/config.json; \
+		./caddy validate --config example_configs/config.timeouts.json; \
 	else \
 		echo "Caddy binary not found. Run 'make xcaddy-build' first."; \
 	fi
