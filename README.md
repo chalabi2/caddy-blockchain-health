@@ -1026,6 +1026,45 @@ Response:
 }
 ```
 
+### Dynamic Timeouts (Per‑Request Deadlines)
+
+Optionally, you can enforce per‑request time budgets before proxying by adding a lightweight handler module: `http.handlers.request_deadline`. This sets a context deadline per request so `reverse_proxy` cancels upstream work when time is up. It does not change the health checker’s own probe timeouts.
+
+Key behavior:
+
+- Defaults to a global timeout; optional tier overrides by user tier
+- Empty tier → uses default timeout directly
+- Non‑empty tier → uppercased and looked up in configured tier map
+- Optional headers: `X-Plan-Tier`, `X-Request-Timeout-Seconds`, `X-Request-Deadline-At`
+- Skips WebSocket and gRPC requests (and any methods you specify)
+
+Minimal Caddyfile example (site route):
+
+```caddy
+route {
+    # Set per-request deadline first (after auth)
+    request_deadline {
+        from placeholder {http.auth.user.tier}
+        default 5s
+        tiers { FREE 1s BASIC 3s PREMIUM 5s ENTERPRISE 8s UNLIMITED 8s }
+        skip { websocket true grpc true methods OPTIONS }
+        add_headers true
+    }
+
+    reverse_proxy {
+        dynamic blockchain_health {
+            # ... your existing health configuration ...
+        }
+    }
+}
+```
+
+Notes:
+
+- Only non‑empty tiers are used for map lookups; otherwise the default applies.
+- `reverse_proxy` respects the canceled request context and stops upstream work once the deadline is reached.
+- Keep this handler independent from your health configuration; it is a generic per‑request timeout.
+
 ## Prometheus Metrics
 
 When `metrics_enabled` is true, the module exposes the following metrics:
