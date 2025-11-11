@@ -42,6 +42,23 @@ func (b *BlockchainHealthUpstream) ServeHealthEndpoint() http.HandlerFunc {
 			return
 		}
 
+		// Defensive: if not provisioned yet, report unhealthy instead of risking a panic
+		if b == nil || b.healthChecker == nil || b.config == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(&HealthEndpointResponse{
+				Status:    "unhealthy",
+				Timestamp: time.Now(),
+				Nodes: NodesStatus{
+					Total:     0,
+					Healthy:   0,
+					Unhealthy: 0,
+				},
+				LastCheck: time.Now(),
+			})
+			return
+		}
+
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
 
