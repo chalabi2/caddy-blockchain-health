@@ -48,6 +48,12 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 
 	var upstreams []*reverseproxy.Upstream
 	healthyCount := 0
+	type selectionInfo struct {
+		name        string
+		serviceType string
+		reason      string
+	}
+	var selectedInfos []selectionInfo
 
 	for _, health := range healthResults {
 		if health.Healthy {
@@ -72,6 +78,9 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 						b.logger.Debug("Skipping non-WebSocket node for WebSocket request",
 							zap.String("node", health.Name),
 							zap.String("service_type", serviceType))
+						if b.metrics != nil {
+							b.metrics.upstreamsExcluded.WithLabelValues(health.Name, serviceType, "filtered_websocket").Inc()
+						}
 						continue
 					}
 				} else {
@@ -81,6 +90,9 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 						b.logger.Debug("Skipping WebSocket node for HTTP request",
 							zap.String("node", health.Name),
 							zap.String("service_type", serviceType))
+						if b.metrics != nil {
+							b.metrics.upstreamsExcluded.WithLabelValues(health.Name, serviceType, "filtered_http").Inc()
+						}
 						continue
 					}
 					// Allow: "rpc", "api", "evm", "", or any other non-websocket service type
@@ -104,6 +116,13 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 			parsedURL, err := url.Parse(upstreamURL)
 			if err != nil {
 				b.logger.Warn("invalid node URL", zap.String("node", health.Name), zap.String("url", upstreamURL))
+				if b.metrics != nil {
+					serviceType := ""
+					if nodeConfig != nil {
+						serviceType = nodeConfig.Metadata["service_type"]
+					}
+					b.metrics.upstreamsExcluded.WithLabelValues(health.Name, serviceType, "invalid_url").Inc()
+				}
 				continue
 			}
 
@@ -117,6 +136,32 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 			}
 
 			upstreams = append(upstreams, upstream)
+			if nodeConfig != nil {
+				selectedInfos = append(selectedInfos, selectionInfo{
+					name:        health.Name,
+					serviceType: nodeConfig.Metadata["service_type"],
+					reason:      "healthy",
+				})
+			} else {
+				selectedInfos = append(selectedInfos, selectionInfo{
+					name:        health.Name,
+					serviceType: "",
+					reason:      "healthy",
+				})
+			}
+		} else {
+			// Count exclusion for unhealthy node
+			if b.metrics != nil {
+				// Look up service type if available
+				st := ""
+				for _, node := range b.config.Nodes {
+					if node.Name == health.Name {
+						st = node.Metadata["service_type"]
+						break
+					}
+				}
+				b.metrics.upstreamsExcluded.WithLabelValues(health.Name, st, "unhealthy").Inc()
+			}
 		}
 	}
 
@@ -134,12 +179,15 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 
 			// Return all nodes (including unhealthy ones) as last resort
 			upstreams = []*reverseproxy.Upstream{}
+			selectedInfos = selectedInfos[:0]
 			for _, health := range healthResults {
 				// Find the corresponding node config for weight
 				weight := 1
+				serviceType := ""
 				for _, node := range b.config.Nodes {
 					if node.Name == health.Name {
 						weight = node.Weight
+						serviceType = node.Metadata["service_type"]
 						break
 					}
 				}
@@ -148,6 +196,9 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 				parsedURL, err := url.Parse(health.URL)
 				if err != nil {
 					b.logger.Warn("invalid node URL", zap.String("node", health.Name), zap.String("url", health.URL))
+					if b.metrics != nil {
+						b.metrics.upstreamsExcluded.WithLabelValues(health.Name, serviceType, "invalid_url").Inc()
+					}
 					continue
 				}
 
@@ -161,6 +212,11 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 				}
 
 				upstreams = append(upstreams, upstream)
+				selectedInfos = append(selectedInfos, selectionInfo{
+					name:        health.Name,
+					serviceType: serviceType,
+					reason:      "fallback_all",
+				})
 			}
 		} else {
 			// We have some healthy nodes, just log the warning but keep using only healthy nodes
@@ -174,6 +230,13 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 		zap.Int("total_nodes", len(b.config.Nodes)),
 		zap.Int("healthy_nodes", healthyCount),
 		zap.Int("selected_upstreams", len(upstreams)))
+
+	// Emit metrics for selected upstreams
+	if b.metrics != nil {
+		for _, sel := range selectedInfos {
+			b.metrics.upstreamsIncluded.WithLabelValues(sel.name, sel.serviceType, sel.reason).Inc()
+		}
+	}
 
 	return upstreams, nil
 }
@@ -297,6 +360,8 @@ func (b *BlockchainHealthUpstream) provision(ctx caddy.Context) error {
 		if err := b.metrics.Register(); err != nil {
 			return fmt.Errorf("failed to register metrics: %w", err)
 		}
+		// Set configured nodes gauge
+		b.metrics.configuredNodes.Set(float64(len(b.config.Nodes)))
 	}
 
 	// Initialize health checker

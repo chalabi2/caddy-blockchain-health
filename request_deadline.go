@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"sync"
+
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 )
@@ -45,6 +47,11 @@ func init() {
 	caddy.RegisterModule(&RequestDeadline{})
 }
 
+var (
+	rdMetricsOnce sync.Once
+	rdMetrics     *RequestDeadlineMetrics
+)
+
 // CaddyModule returns the Caddy module information.
 func (*RequestDeadline) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
@@ -64,6 +71,10 @@ func (h *RequestDeadline) Provision(ctx caddy.Context) error {
 		}
 		h.tierDur[strings.ToUpper(strings.TrimSpace(k))] = d
 	}
+	rdMetricsOnce.Do(func() {
+		rdMetrics = NewRequestDeadlineMetrics()
+		_ = rdMetrics.Register() // ignore AlreadyRegistered
+	})
 	return nil
 }
 
@@ -123,6 +134,7 @@ func (h *RequestDeadline) ServeHTTP(w http.ResponseWriter, r *http.Request, next
 		return next.ServeHTTP(w, r)
 	}
 
+	start := time.Now()
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
@@ -133,8 +145,28 @@ func (h *RequestDeadline) ServeHTTP(w http.ResponseWriter, r *http.Request, next
 		w.Header().Set("X-Request-Deadline-At", time.Now().Add(timeout).UTC().Format(time.RFC3339))
 	}
 
+	// Emit applied metrics
+	if rdMetrics != nil {
+		rdMetrics.appliedTotal.WithLabelValues(tier).Inc()
+		rdMetrics.appliedSeconds.WithLabelValues(tier).Observe(timeout.Seconds())
+	}
+
 	r = r.WithContext(ctx)
-	return next.ServeHTTP(w, r)
+	err := next.ServeHTTP(w, r)
+
+	// Outcome and duration
+	outcome := "success"
+	if ctx.Err() == context.DeadlineExceeded {
+		outcome = "timeout"
+		if rdMetrics != nil {
+			rdMetrics.timeoutsTotal.WithLabelValues(tier, r.Method, r.Host).Inc()
+		}
+	}
+	if rdMetrics != nil {
+		rdMetrics.durationSeconds.WithLabelValues(tier, outcome).Observe(time.Since(start).Seconds())
+	}
+
+	return err
 }
 
 func (h *RequestDeadline) shouldSkip(r *http.Request) bool {

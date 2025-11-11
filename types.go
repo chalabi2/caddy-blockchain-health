@@ -170,12 +170,15 @@ type HealthCache struct {
 
 // Metrics holds prometheus metrics for the module
 type Metrics struct {
-	totalChecks      prometheus.Counter
-	healthyNodes     prometheus.Gauge
-	unhealthyNodes   prometheus.Gauge
-	checkDuration    prometheus.Histogram
-	blockHeightGauge *prometheus.GaugeVec
-	errorCount       *prometheus.CounterVec
+	totalChecks       prometheus.Counter
+	healthyNodes      prometheus.Gauge
+	unhealthyNodes    prometheus.Gauge
+	checkDuration     prometheus.Histogram
+	blockHeightGauge  *prometheus.GaugeVec
+	errorCount        *prometheus.CounterVec
+	configuredNodes   prometheus.Gauge
+	upstreamsIncluded *prometheus.CounterVec
+	upstreamsExcluded *prometheus.CounterVec
 }
 
 // ProtocolHandler defines the interface for protocol-specific health checks
