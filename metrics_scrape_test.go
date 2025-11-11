@@ -62,7 +62,7 @@ func TestMetricsAreScrapeable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("scrape /metrics: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read body: %v", err)
