@@ -25,6 +25,12 @@ func NewMetrics() *Metrics {
 			Name:      "unhealthy_nodes",
 			Help:      "Number of currently unhealthy nodes",
 		}),
+		configuredNodes: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: "caddy",
+			Subsystem: "blockchain_health",
+			Name:      "configured_nodes",
+			Help:      "Number of nodes configured in the module",
+		}),
 		checkDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: "caddy",
 			Subsystem: "blockchain_health",
@@ -44,6 +50,18 @@ func NewMetrics() *Metrics {
 			Name:      "errors_total",
 			Help:      "Total number of errors by node and type",
 		}, []string{"node_name", "error_type"}),
+		upstreamsIncluded: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "caddy",
+			Subsystem: "blockchain_health",
+			Name:      "upstreams_included_total",
+			Help:      "Total number of times a node was included as an upstream",
+		}, []string{"node_name", "service_type", "reason"}),
+		upstreamsExcluded: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "caddy",
+			Subsystem: "blockchain_health",
+			Name:      "upstreams_excluded_total",
+			Help:      "Total number of times a node was excluded from upstreams and why",
+		}, []string{"node_name", "service_type", "reason"}),
 	}
 }
 
@@ -53,9 +71,12 @@ func (m *Metrics) Register() error {
 		m.totalChecks,
 		m.healthyNodes,
 		m.unhealthyNodes,
+		m.configuredNodes,
 		m.checkDuration,
 		m.blockHeightGauge,
 		m.errorCount,
+		m.upstreamsIncluded,
+		m.upstreamsExcluded,
 	}
 
 	for _, collector := range collectors {
@@ -76,9 +97,12 @@ func (m *Metrics) Unregister() {
 		m.totalChecks,
 		m.healthyNodes,
 		m.unhealthyNodes,
+		m.configuredNodes,
 		m.checkDuration,
 		m.blockHeightGauge,
 		m.errorCount,
+		m.upstreamsIncluded,
+		m.upstreamsExcluded,
 	}
 
 	for _, collector := range collectors {
@@ -114,4 +138,70 @@ func (m *Metrics) SetBlockHeight(nodeName string, height float64) {
 // IncrementError increments the error counter for a specific node and error type
 func (m *Metrics) IncrementError(nodeName, errorType string) {
 	m.errorCount.WithLabelValues(nodeName, errorType).Inc()
+}
+
+// RequestDeadlineMetrics tracks per-request deadline middleware metrics
+type RequestDeadlineMetrics struct {
+	appliedTotal    *prometheus.CounterVec
+	appliedSeconds  *prometheus.HistogramVec
+	timeoutsTotal   *prometheus.CounterVec
+	durationSeconds *prometheus.HistogramVec
+}
+
+// NewRequestDeadlineMetrics creates request deadline metrics
+func NewRequestDeadlineMetrics() *RequestDeadlineMetrics {
+	return &RequestDeadlineMetrics{
+		appliedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "caddy",
+			Subsystem: "request_deadline",
+			Name:      "applied_total",
+			Help:      "Total number of requests where a deadline was applied",
+		}, []string{"tier"}),
+		appliedSeconds: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: "caddy",
+			Subsystem: "request_deadline",
+			Name:      "applied_seconds",
+			Help:      "Configured per-request timeout applied in seconds",
+			Buckets:   prometheus.DefBuckets,
+		}, []string{"tier"}),
+		timeoutsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "caddy",
+			Subsystem: "request_deadline",
+			Name:      "timeouts_total",
+			Help:      "Total number of requests that exceeded their deadline",
+		}, []string{"tier", "method", "host"}),
+		durationSeconds: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: "caddy",
+			Subsystem: "request_deadline",
+			Name:      "duration_seconds",
+			Help:      "Observed request duration by outcome relative to deadline middleware",
+			Buckets:   prometheus.DefBuckets,
+		}, []string{"tier", "outcome"}),
+	}
+}
+
+// Register registers request deadline metrics
+func (m *RequestDeadlineMetrics) Register() error {
+	collectors := []prometheus.Collector{
+		m.appliedTotal,
+		m.appliedSeconds,
+		m.timeoutsTotal,
+		m.durationSeconds,
+	}
+	for _, c := range collectors {
+		if err := prometheus.Register(c); err != nil {
+			if _, ok := err.(prometheus.AlreadyRegisteredError); !ok {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Unregister unregisters request deadline metrics
+func (m *RequestDeadlineMetrics) Unregister() {
+	prometheus.Unregister(m.appliedTotal)
+	prometheus.Unregister(m.appliedSeconds)
+	prometheus.Unregister(m.timeoutsTotal)
+	prometheus.Unregister(m.durationSeconds)
 }

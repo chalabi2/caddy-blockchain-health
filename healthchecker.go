@@ -34,6 +34,7 @@ func NewHealthChecker(config *Config, cache *HealthCache, metrics *Metrics, logg
 
 // CheckAllNodes performs health checks on all configured nodes
 func (h *HealthChecker) CheckAllNodes(ctx context.Context) ([]*NodeHealth, error) {
+	start := time.Now()
 	nodes := h.config.Nodes
 	if len(nodes) == 0 {
 		return nil, fmt.Errorf("no nodes configured")
@@ -97,6 +98,7 @@ func (h *HealthChecker) CheckAllNodes(ctx context.Context) ([]*NodeHealth, error
 	// Update metrics
 	if h.metrics != nil {
 		h.updateMetrics(results)
+		h.metrics.RecordCheckDuration(time.Since(start).Seconds())
 	}
 
 	return results, nil
