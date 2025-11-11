@@ -15,6 +15,14 @@ import (
 
 // GetUpstreams implements reverseproxy.UpstreamSource
 func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseproxy.Upstream, error) {
+	// Defensive: ensure module is provisioned and logger present
+	if b == nil || b.config == nil || b.healthChecker == nil {
+		return nil, fmt.Errorf("blockchain_health upstream not provisioned")
+	}
+	if b.logger == nil {
+		b.logger = zap.NewNop()
+	}
+
 	b.mutex.RLock()
 	defer b.mutex.RUnlock()
 
@@ -125,6 +133,17 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 				}
 				continue
 			}
+			if parsedURL.Host == "" {
+				b.logger.Warn("parsed URL has empty host; skipping upstream", zap.String("node", health.Name), zap.String("url", upstreamURL))
+				if b.metrics != nil {
+					serviceType := ""
+					if nodeConfig != nil {
+						serviceType = nodeConfig.Metadata["service_type"]
+					}
+					b.metrics.upstreamsExcluded.WithLabelValues(health.Name, serviceType, "empty_host").Inc()
+				}
+				continue
+			}
 
 			upstream := &reverseproxy.Upstream{
 				Dial: parsedURL.Host,
@@ -201,6 +220,13 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 					}
 					continue
 				}
+				if parsedURL.Host == "" {
+					b.logger.Warn("parsed URL has empty host; skipping fallback upstream", zap.String("node", health.Name), zap.String("url", health.URL))
+					if b.metrics != nil {
+						b.metrics.upstreamsExcluded.WithLabelValues(health.Name, serviceType, "empty_host").Inc()
+					}
+					continue
+				}
 
 				upstream := &reverseproxy.Upstream{
 					Dial: parsedURL.Host,
@@ -230,6 +256,11 @@ func (b *BlockchainHealthUpstream) GetUpstreams(r *http.Request) ([]*reverseprox
 		zap.Int("total_nodes", len(b.config.Nodes)),
 		zap.Int("healthy_nodes", healthyCount),
 		zap.Int("selected_upstreams", len(upstreams)))
+
+	// Never return an empty upstream list; signal error so caller can 502 gracefully
+	if len(upstreams) == 0 {
+		return nil, fmt.Errorf("no available upstreams selected")
+	}
 
 	// Emit metrics for selected upstreams
 	if b.metrics != nil {
