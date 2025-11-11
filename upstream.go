@@ -386,14 +386,12 @@ func (b *BlockchainHealthUpstream) provision(ctx caddy.Context) error {
 	b.cache = NewHealthCache(cacheDuration)
 
 	// Initialize metrics if enabled
-	if b.config.Monitoring.MetricsEnabled {
-		b.metrics = NewMetrics()
-		if err := b.metrics.Register(); err != nil {
-			return fmt.Errorf("failed to register metrics: %w", err)
-		}
-		// Set configured nodes gauge
-		b.metrics.configuredNodes.Set(float64(len(b.config.Nodes)))
+	b.metrics = NewMetrics()
+	if err := b.metrics.Register(); err != nil {
+		return fmt.Errorf("failed to register metrics: %w", err)
 	}
+	// Set configured nodes gauge
+	b.metrics.configuredNodes.Set(float64(len(b.config.Nodes)))
 
 	// Initialize health checker
 	b.healthChecker = NewHealthChecker(b.config, b.cache, b.metrics, b.logger)
