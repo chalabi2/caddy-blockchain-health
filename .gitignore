@@ -179,3 +179,4 @@ charts/*/requirements.lock
 # Local configuration examples
 example_configs/*.local.*
 local_configs/
+.gocache/
