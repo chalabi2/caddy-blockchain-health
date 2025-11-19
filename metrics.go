@@ -1,6 +1,8 @@
 package blockchain_health
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -62,6 +64,47 @@ func NewMetrics() *Metrics {
 			Name:      "upstreams_excluded_total",
 			Help:      "Total number of times a node was excluded from upstreams and why",
 		}, []string{"node_name", "service_type", "reason"}),
+	}
+}
+
+var (
+	globalMetrics     *Metrics
+	globalMetricsMu   sync.Mutex
+	globalMetricsRefs int
+)
+
+// acquireGlobalMetrics returns a process-wide Metrics instance registered with
+// the default Prometheus registry. Each caller must pair it with
+// releaseGlobalMetrics when the upstream is cleaned up.
+func acquireGlobalMetrics() (*Metrics, error) {
+	globalMetricsMu.Lock()
+	defer globalMetricsMu.Unlock()
+
+	if globalMetrics == nil {
+		globalMetrics = NewMetrics()
+		if err := globalMetrics.Register(); err != nil {
+			globalMetrics = nil
+			return nil, err
+		}
+	}
+
+	globalMetricsRefs++
+	return globalMetrics, nil
+}
+
+// releaseGlobalMetrics decrements the reference count and unregisters the
+// collectors when no upstreams remain.
+func releaseGlobalMetrics() {
+	globalMetricsMu.Lock()
+	defer globalMetricsMu.Unlock()
+
+	if globalMetricsRefs > 0 {
+		globalMetricsRefs--
+	}
+
+	if globalMetricsRefs == 0 && globalMetrics != nil {
+		globalMetrics.Unregister()
+		globalMetrics = nil
 	}
 }
 
