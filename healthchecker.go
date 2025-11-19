@@ -108,6 +108,9 @@ func (h *HealthChecker) CheckAllNodes(ctx context.Context) ([]*NodeHealth, error
 func countHealthyNodes(results []*NodeHealth) int {
 	count := 0
 	for _, health := range results {
+		if health == nil {
+			continue
+		}
 		if health.Healthy {
 			count++
 		}

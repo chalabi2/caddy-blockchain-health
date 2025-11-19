@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -174,11 +175,11 @@ func (c *CosmosHandler) checkRPCStatus(ctx context.Context, url string) (uint64,
 			zap.Error(err))
 		return 0, false, fmt.Errorf("RPC request failed: %w", err)
 	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
+	defer func(body io.ReadCloser) {
+		if err := body.Close(); err != nil {
 			c.logger.Debug("Failed to close response body", zap.Error(err))
 		}
-	}()
+	}(resp.Body)
 
 	c.logger.Debug("RPC response received",
 		zap.String("url", statusURL),
@@ -279,11 +280,11 @@ func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (ui
 			zap.Error(err))
 		return 0, false, fmt.Errorf("REST block request failed: %w", err)
 	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
+	defer func(body io.ReadCloser) {
+		if err := body.Close(); err != nil {
 			c.logger.Debug("Failed to close response body", zap.Error(err))
 		}
-	}()
+	}(resp.Body)
 
 	c.logger.Debug("REST block response received",
 		zap.String("url", blockURL),
