@@ -10,6 +10,7 @@ import (
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp/reverseproxy"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -386,7 +387,7 @@ func (b *BlockchainHealthUpstream) provision(ctx caddy.Context) error {
 	b.cache = NewHealthCache(cacheDuration)
 
 	// Initialize metrics (shared across upstream instances)
-	metrics, err := acquireGlobalMetrics()
+	metrics, err := acquireGlobalMetrics(prometheus.DefaultRegisterer)
 	if err != nil {
 		return fmt.Errorf("failed to register metrics: %w", err)
 	}

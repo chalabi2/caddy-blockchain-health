@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"sync"
-
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 )
@@ -47,10 +45,7 @@ func init() {
 	caddy.RegisterModule(&RequestDeadline{})
 }
 
-var (
-	rdMetricsOnce sync.Once
-	rdMetrics     *RequestDeadlineMetrics
-)
+var rdMetrics *RequestDeadlineMetrics
 
 // CaddyModule returns the Caddy module information.
 func (*RequestDeadline) CaddyModule() caddy.ModuleInfo {
@@ -71,10 +66,11 @@ func (h *RequestDeadline) Provision(ctx caddy.Context) error {
 		}
 		h.tierDur[strings.ToUpper(strings.TrimSpace(k))] = d
 	}
-	rdMetricsOnce.Do(func() {
-		rdMetrics = NewRequestDeadlineMetrics()
-		_ = rdMetrics.Register() // ignore AlreadyRegistered
-	})
+	metrics, err := acquireRequestDeadlineMetrics(nil)
+	if err != nil {
+		return err
+	}
+	rdMetrics = metrics
 	return nil
 }
 
