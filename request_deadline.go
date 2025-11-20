@@ -206,7 +206,7 @@ func (h *RequestDeadline) resolveTier(r *http.Request) string {
 	// Attempt placeholder via Caddy Replacer if available
 	if len(h.Sources) > 0 {
 		if replVal := r.Context().Value(caddy.ReplacerCtxKey); replVal != nil {
-			if repl, ok := replVal.(caddy.Replacer); ok {
+			if repl, ok := replVal.(*caddy.Replacer); ok {
 				for _, s := range h.Sources {
 					if s.Type == "placeholder" && s.Value != "" {
 						if v := strings.TrimSpace(repl.ReplaceAll(s.Value, "")); v != "" {
