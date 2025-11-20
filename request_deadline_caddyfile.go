@@ -15,6 +15,7 @@ import (
 func init() {
 	// Register Caddyfile directive for this handler
 	httpcaddyfile.RegisterHandlerDirective("request_deadline", parseRequestDeadlineCaddyfile)
+	httpcaddyfile.RegisterDirectiveOrder("request_deadline", httpcaddyfile.Before, "reverse_proxy")
 }
 
 func parseRequestDeadlineCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {

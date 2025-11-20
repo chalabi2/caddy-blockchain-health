@@ -387,7 +387,14 @@ func (b *BlockchainHealthUpstream) provision(ctx caddy.Context) error {
 	b.cache = NewHealthCache(cacheDuration)
 
 	// Initialize metrics (shared across upstream instances)
-	metrics, err := acquireGlobalMetrics(prometheus.DefaultRegisterer)
+	var registerer prometheus.Registerer
+	if reg := ctx.GetMetricsRegistry(); reg != nil {
+		registerer = reg
+	} else {
+		registerer = prometheus.DefaultRegisterer
+	}
+
+	metrics, err := acquireGlobalMetrics(registerer)
 	if err != nil {
 		return fmt.Errorf("failed to register metrics: %w", err)
 	}

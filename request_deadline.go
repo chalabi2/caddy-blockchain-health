@@ -9,6 +9,7 @@ import (
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Source describes where to read a tier value from
@@ -66,7 +67,13 @@ func (h *RequestDeadline) Provision(ctx caddy.Context) error {
 		}
 		h.tierDur[strings.ToUpper(strings.TrimSpace(k))] = d
 	}
-	metrics, err := acquireRequestDeadlineMetrics(nil)
+	var registerer prometheus.Registerer
+	if reg := ctx.GetMetricsRegistry(); reg != nil {
+		registerer = reg
+	} else {
+		registerer = prometheus.DefaultRegisterer
+	}
+	metrics, err := acquireRequestDeadlineMetrics(registerer)
 	if err != nil {
 		return err
 	}
