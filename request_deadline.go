@@ -141,6 +141,11 @@ func (h *RequestDeadline) ServeHTTP(w http.ResponseWriter, r *http.Request, next
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
+	path := r.URL.Path
+	if path == "" {
+		path = "/"
+	}
+
 	if h.AddHeaders {
 		// Set headers early; downstream may overwrite if desired
 		w.Header().Set("X-Plan-Tier", tier)
@@ -150,8 +155,8 @@ func (h *RequestDeadline) ServeHTTP(w http.ResponseWriter, r *http.Request, next
 
 	// Emit applied metrics
 	if rdMetrics != nil {
-		rdMetrics.appliedTotal.WithLabelValues(tier).Inc()
-		rdMetrics.appliedSeconds.WithLabelValues(tier).Observe(timeout.Seconds())
+		rdMetrics.appliedTotal.WithLabelValues(tier, path).Inc()
+		rdMetrics.appliedSeconds.WithLabelValues(tier, path).Observe(timeout.Seconds())
 	}
 
 	r = r.WithContext(ctx)
@@ -162,11 +167,11 @@ func (h *RequestDeadline) ServeHTTP(w http.ResponseWriter, r *http.Request, next
 	if ctx.Err() == context.DeadlineExceeded {
 		outcome = "timeout"
 		if rdMetrics != nil {
-			rdMetrics.timeoutsTotal.WithLabelValues(tier, r.Method, r.Host).Inc()
+			rdMetrics.timeoutsTotal.WithLabelValues(tier, r.Method, r.Host, path).Inc()
 		}
 	}
 	if rdMetrics != nil {
-		rdMetrics.durationSeconds.WithLabelValues(tier, outcome).Observe(time.Since(start).Seconds())
+		rdMetrics.durationSeconds.WithLabelValues(tier, outcome, path).Observe(time.Since(start).Seconds())
 	}
 
 	return err

@@ -242,27 +242,27 @@ func NewRequestDeadlineMetrics() *RequestDeadlineMetrics {
 			Subsystem: "request_deadline",
 			Name:      "applied_total",
 			Help:      "Total number of requests where a deadline was applied",
-		}, []string{"tier"}),
+		}, []string{"tier", "path"}),
 		appliedSeconds: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: "caddy",
 			Subsystem: "request_deadline",
 			Name:      "applied_seconds",
 			Help:      "Configured per-request timeout applied in seconds",
 			Buckets:   prometheus.DefBuckets,
-		}, []string{"tier"}),
+		}, []string{"tier", "path"}),
 		timeoutsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "caddy",
 			Subsystem: "request_deadline",
 			Name:      "timeouts_total",
 			Help:      "Total number of requests that exceeded their deadline",
-		}, []string{"tier", "method", "host"}),
+		}, []string{"tier", "method", "host", "path"}),
 		durationSeconds: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: "caddy",
 			Subsystem: "request_deadline",
 			Name:      "duration_seconds",
 			Help:      "Observed request duration by outcome relative to deadline middleware",
 			Buckets:   prometheus.DefBuckets,
-		}, []string{"tier", "outcome"}),
+		}, []string{"tier", "outcome", "path"}),
 	}
 }
 
