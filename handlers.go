@@ -236,9 +236,13 @@ func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (ui
 			zap.Error(err))
 		return 0, false, fmt.Errorf("REST syncing request failed: %w", err)
 	}
+
+	// Ensure response body is closed properly
 	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			c.logger.Debug("Failed to close response body", zap.Error(err))
+		if resp != nil && resp.Body != nil {
+			if err := resp.Body.Close(); err != nil {
+				c.logger.Debug("Failed to close response body", zap.Error(err))
+			}
 		}
 	}()
 
@@ -280,11 +284,15 @@ func (c *CosmosHandler) checkRESTStatus(ctx context.Context, baseURL string) (ui
 			zap.Error(err))
 		return 0, false, fmt.Errorf("REST block request failed: %w", err)
 	}
-	defer func(body io.ReadCloser) {
-		if err := body.Close(); err != nil {
-			c.logger.Debug("Failed to close response body", zap.Error(err))
+
+	// Ensure response body is closed properly
+	defer func() {
+		if resp != nil && resp.Body != nil {
+			if err := resp.Body.Close(); err != nil {
+				c.logger.Debug("Failed to close response body", zap.Error(err))
+			}
 		}
-	}(resp.Body)
+	}()
 
 	c.logger.Debug("REST block response received",
 		zap.String("url", blockURL),
